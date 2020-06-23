@@ -1,28 +1,8 @@
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
+From shiris.program_logic Require Import state.
 Set Default Proof Using "Type".
 
-Record state (ST A: Type): Type := State {
-                                      runState: ST -> option (A * ST)
-                                     }.
-
-
-Arguments State {_ _} _.
-Arguments runState {_ _} _.
-Instance mret_state ST : MRet (state ST) := λ A a, State $ λ s, Some (a, s).
-(* 
-Definition mret {A} (x: A): State A := fun m => (x, m).
-Definition mbind {A B} (e: State A) (f: A -> State B) :=
-  fun m => let '(x, m') := e m in f x m'.
-(* rewrite in terms of bind and re proof seq-wp-rule. *)
-Definition seq {A B} (e: State A) (e2: State B): State B :=
-  fun m => let '(_, m') := e m in e2 m'.
-Definition get (l: loc) : State nat :=  λ h , (maybe (mlookup h l) 0, h).
-Definition put (l: loc) (v : nat) : State unit :=  λ h, (tt, minsert l v h).
-Definition alloc (v: nat) : State loc := (λ h, let loc := msize h in (loc, (minsert loc v h))).
-Definition free (l: loc): State unit := λ h, (tt, mdelete l h).
-
- *)
 
 Definition state_wp `{invG Σ} {ST A} (SI: ST -> iProp Σ)
            (e: state ST A) (Φ: A -> iProp Σ): iProp Σ := ∀ σ,
@@ -75,4 +55,28 @@ Section state_wp.
     iMod "HPhi" as "HPhi".
     eauto with iFrame.
   Qed.
+
+  Lemma wp_ret {A} (v: A) Φ: Φ v ⊢ state_wp SI (mret v) Φ.
+  Proof.
+    iIntros "Hwp" (σ) "HSi".
+    iModIntro.
+    iExists v, σ.
+    eauto with iFrame.
+  Qed.
+
+  Lemma wp_bind {A B} (e: state ST A) (f: A -> state ST B) Φ:
+    state_wp SI e (λ v, state_wp SI (f v) Φ) ⊢ state_wp SI (e ≫= f) Φ.
+  Proof.
+    iIntros "Hwp" (σ) "HSi".
+    iMod ("Hwp" $! (σ) with "HSi") as (x σ') "(Hrun & HSi' & Hwp')".
+    iMod ("Hwp'" $! (σ') with "HSi'") as (y σ'') "(Hrun' & HSi'' & Hpost)".
+    iModIntro.
+    iExists y, σ''.
+    simpl.
+    iDestruct "Hrun" as %->.
+    iDestruct "Hrun'" as %->.
+    eauto with iFrame.
+  Qed.
+
+
 End state_wp.
