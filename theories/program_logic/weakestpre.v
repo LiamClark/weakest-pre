@@ -188,11 +188,25 @@ Section state_wp_gp.
   (* update both parts of a composition with a frame perserving update *)
   About cmra_update_op.
   About prod_local_update.
+  About singleton_local_update.
+
+
+  About lookup_fmap.
+  Lemma lift_excl_some σ n v: σ !! n = Some v -> lift_excl σ !! n = Some (Excl v).
+  Proof.
+    intro H.
+    unfold lift_excl.
+    rewrite lookup_fmap.
+    rewrite H.
+    reflexivity.
+  Qed.
+
 
   Lemma points_to_update γ σ n v w:
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
   Proof.
     iIntros "Hsi Hpt".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as "%".
     unfold state_interp.
     unfold points_to.
     iApply own_op.
@@ -201,8 +215,8 @@ Section state_wp_gp.
       (*To prove: ?Goal ⋅ ?Goal0 ~~> ● lift_excl (<[n:=w]> σ) ⋅ ◯ {[n := Excl w]} *)
       apply auth_update. (*Or perhaps cmra_update_op *)
       (*To prove: (?a, ?b) ~l~> (lift_excl (<[n:=w]> σ), {[n := Excl w]}) *)
-      unfold local_update.
-      apply prod_local_update.
+      pose (singleton_local_update (lift_excl σ) n _ _ _ _ (lift_excl_some _ _ _ H)).
+      apply singleton_local_update.
       apply: prod_update. (*This doesn't apply, how do I split this into two seperate updates? *) 
       + (*use insert_update *)
       + (*use singleton update  *).
