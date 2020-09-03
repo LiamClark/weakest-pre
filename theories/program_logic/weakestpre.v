@@ -143,7 +143,7 @@ Section state_wp_gp.
     - discriminate H.
   Qed.
 
-  Lemma bla γ σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
+  Lemma si_points_to_agree γ σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
   Proof.
     iIntros "Hsi Hpt".
     unfold state_interp.
@@ -183,9 +183,33 @@ Section state_wp_gp.
   About map_fmap_ext.
   About Excl'.
 
-  Lemma bla' γ σ n v w:
+  Locate "~~>".
+  SearchAbout cmra_update.
+  (* update both parts of a composition with a frame perserving update *)
+  About cmra_update_op.
+  About prod_local_update.
+
+  Lemma points_to_update γ σ n v w:
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
-  Proof. Admitted.
+  Proof.
+    iIntros "Hsi Hpt".
+    unfold state_interp.
+    unfold points_to.
+    iApply own_op.
+    iApply (own_update_2 with "[Hsi]").
+    -
+      (*To prove: ?Goal ⋅ ?Goal0 ~~> ● lift_excl (<[n:=w]> σ) ⋅ ◯ {[n := Excl w]} *)
+      apply auth_update. (*Or perhaps cmra_update_op *)
+      (*To prove: (?a, ?b) ~l~> (lift_excl (<[n:=w]> σ), {[n := Excl w]}) *)
+      unfold local_update.
+      apply prod_local_update.
+      apply: prod_update. (*This doesn't apply, how do I split this into two seperate updates? *) 
+      + (*use insert_update *)
+      + (*use singleton update  *).
+    - iAssumption.
+    - iAssumption.
+
+  Admitted.
 
 
 
