@@ -189,7 +189,9 @@ Section state_wp_gp.
   About cmra_update_op.
   About prod_local_update.
   About singleton_local_update.
-
+  About fmap_insert.
+  About replace_local_update.
+  About IdFree.
 
   About lookup_fmap.
   Lemma lift_excl_some σ n v: σ !! n = Some v -> lift_excl σ !! n = Some (Excl v).
@@ -201,6 +203,10 @@ Section state_wp_gp.
     reflexivity.
   Qed.
 
+(*  Lemma fmap_l_update (m: gmap nat nat) (f: nat -> nat) (i x x' y y': nat):
+    (m, {[i := y]}) ~l~> (<[i:=x']> m, {[i := y']}) ->
+    (f <$> m, {[i := f y]}) ~l~> (f <$> <[i:=x']> m, {[i := f y']}). *)
+  SearchAbout fmap insert.
 
   Lemma points_to_update γ σ n v w:
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
@@ -211,19 +217,20 @@ Section state_wp_gp.
     unfold points_to.
     iApply own_op.
     iApply (own_update_2 with "[Hsi]").
+    2: iAssumption.
+    2: iAssumption.
     -
-      (*To prove: ?Goal ⋅ ?Goal0 ~~> ● lift_excl (<[n:=w]> σ) ⋅ ◯ {[n := Excl w]} *)
-      apply auth_update. (*Or perhaps cmra_update_op *)
-      (*To prove: (?a, ?b) ~l~> (lift_excl (<[n:=w]> σ), {[n := Excl w]}) *)
-      pose (singleton_local_update (lift_excl σ) n _ _ _ _ (lift_excl_some _ _ _ H)).
-      apply singleton_local_update.
-      apply: prod_update. (*This doesn't apply, how do I split this into two seperate updates? *) 
-      + (*use insert_update *)
-      + (*use singleton update  *).
-    - iAssumption.
-    - iAssumption.
+      apply auth_update.
+      unfold lift_excl.
+      rewrite fmap_insert.
+      eapply singleton_local_update.
+      * apply lift_excl_some. apply H.
+      * apply replace_local_update.
+        -- admit.
+        -- admit.
 
-  Admitted.
+
+    Admitted.
 
 
 
