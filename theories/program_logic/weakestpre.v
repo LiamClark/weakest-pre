@@ -207,6 +207,9 @@ Section state_wp_gp.
     (m, {[i := y]}) ~l~> (<[i:=x']> m, {[i := y']}) ->
     (f <$> m, {[i := f y]}) ~l~> (f <$> <[i:=x']> m, {[i := f y']}). *)
   SearchAbout fmap insert.
+  About exclusive_local_update.
+  SearchAbout excl_valid.
+  Locate "✓".
 
   Lemma points_to_update γ σ n v w:
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
@@ -225,14 +228,9 @@ Section state_wp_gp.
       rewrite fmap_insert.
       eapply singleton_local_update.
       * apply lift_excl_some. apply H.
-      * apply replace_local_update.
-        -- admit.
-        -- admit.
-
-
-    Admitted.
-
-
+      * apply exclusive_local_update.
+        reflexivity.
+    Qed.
 
   Context (γ: gname).
 
