@@ -237,5 +237,16 @@ Section state_wp_gp.
 
   Lemma wp_load n v (Ψ: nat -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get _ n) Ψ.
+  Proof.
+    iIntros "Hpt ϕ" (σ) "HSi".
+    iModIntro. iExists v, σ .
+    iSplit.
+    - unfold runState. unfold get. unfold fmap.
+      iDestruct (si_points_to_agree with "HSi Hpt") as "%".
+      rewrite H. done.
+    - simpl.
+      iDestruct ("ϕ" with "Hpt") as "$".
+      iFrame.
 
-                       End. 
+  Qed.
+
