@@ -250,3 +250,16 @@ Section state_wp_gp.
 
   Qed.
 
+  Lemma wp_store n v v' (Ψ: unit -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put  _ n v') Ψ.
+  Proof.
+    iIntros "Hpt ϕ" (σ) "HSi".
+    iMod ((points_to_update _ _ _ v v') with "HSi Hpt") as "Hup".
+    iModIntro. iExists tt, (<[n:=v']> σ).
+    iSplit.
+    - done.
+    - iDestruct "Hup" as "($ & Hup')".
+      iApply ("ϕ" with "Hup'").
+  Qed.
+
+
