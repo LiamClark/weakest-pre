@@ -1,4 +1,4 @@
-From stdpp Require Import base gmap.
+From stdpp Require Import base gmap fin_sets fin_map_dom.
 
 Record state (ST A: Type): Type := State {
                                       runState: ST -> option (A * ST)
@@ -34,3 +34,13 @@ Section gmap_state.
     State $ λ st, Some (tt, delete n st).
 
 End gmap_state.
+
+
+  Lemma fresh_none (σ: gmap nat nat): 
+    let l := fresh (dom (gset nat) σ)
+    in σ !! l = None.
+  Proof.
+    apply (not_elem_of_dom _ _).
+    apply is_fresh.
+    Grab Existential Variables.
+  Qed.

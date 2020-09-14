@@ -1,3 +1,4 @@
+From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
@@ -79,12 +80,22 @@ Section state_wp.
      iIntros (v) "?". by iApply HΦ.
   Qed.
 
-  Lemma wp_value_fupd' {A} Φ (v: A) : (|==> Φ v) ⊢ state_wp SI (mret v) Φ.
+  Lemma wp_value_bupd' {A} Φ (v: A) : (|==> Φ v) ⊢ state_wp SI (mret v) Φ.
   Proof. by rewrite -wp_bupd -wp_ret. Qed.
 
 End state_wp.
 
 Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+
+
+
+  Lemma fresh_none (σ: gmap nat nat): 
+    let l := fresh (dom (gset nat) σ)
+    in σ !! l = None.
+  Proof.
+    apply (not_elem_of_dom (D := gset nat)).
+    apply is_fresh.
+  Qed.
 
 Section state_wp_gp.
   Context `{! inG Σ (heapR natO)}.
@@ -129,6 +140,8 @@ Section state_wp_gp.
   About leibniz_equiv_iff.
   About f_equiv.
 
+  Context (γ: gname).
+
   Lemma rewrite_lookups σ n v : lift_excl σ !! n ≡ Excl' v -> (σ !! n) = Some v.
   Proof.
     intros H.
@@ -143,7 +156,7 @@ Section state_wp_gp.
     - discriminate H.
   Qed.
 
-  Lemma si_points_to_agree γ σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
+  Lemma si_points_to_agree σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
   Proof.
     iIntros "Hsi Hpt".
     unfold state_interp.
@@ -211,7 +224,7 @@ Section state_wp_gp.
   SearchAbout excl_valid.
   Locate "✓".
 
-  Lemma points_to_update γ σ n v w:
+  Lemma points_to_update σ n v w:
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
   Proof.
     iIntros "Hsi Hpt".
@@ -232,9 +245,45 @@ Section state_wp_gp.
         reflexivity.
     Qed.
 
-  Context (γ: gname).
+  Locate "∉".
+  Locate "∅". 
+  Locate "◯".
+  SearchAbout dom.
+  SearchAbout empty.
 
+  Lemma si_alloc σ v:
+    let l := fresh (dom (gset nat) σ)
+    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
+  Proof.
+    iIntros "Hsi".
+    unfold state_interp. unfold points_to.
+    iApply own_op.
+    iApply (own_update).
+    -  apply auth_update_alloc.
+       unfold lift_excl. rewrite fmap_insert. 
+       apply alloc_singleton_local_update.
+       + rewrite lookup_fmap. rewrite fresh_none. done.
+       + done. 
+    - unfold lift_excl.  done.
+  Qed.
 
+  (* Lemma si_alloc σ v:
+    let l := fresh (dom (gset nat) σ)
+    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
+  Proof.
+    iIntros "Hsi".
+    unfold state_interp. unfold points_to.
+    iApply own_op.
+    iApply (own_update).
+    -  apply auth_update. unfold lift_excl. rewrite fmap_insert. 
+       apply alloc_singleton_local_update.
+       + rewrite lookup_fmap. rewrite fresh_none. done.
+       + done. 
+    - unfold lift_excl. iApply own_op. iFrame.
+  Admitted. 
+
+  How do I get own (◯ ∅) since that should be provable too?
+ *)
   Lemma wp_load n v (Ψ: nat -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get _ n) Ψ.
   Proof.
@@ -247,14 +296,13 @@ Section state_wp_gp.
     - simpl.
       iDestruct ("ϕ" with "Hpt") as "$".
       iFrame.
-
   Qed.
 
-  Lemma wp_store n v v' (Ψ: unit -> iProp Σ) :
+  Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put  _ n v') Ψ.
   Proof.
     iIntros "Hpt ϕ" (σ) "HSi".
-    iMod ((points_to_update _ _ _ v v') with "HSi Hpt") as "Hup".
+    iMod ((points_to_update  _ _ v v') with "HSi Hpt") as "Hup".
     iModIntro. iExists tt, (<[n:=v']> σ).
     iSplit.
     - done.
@@ -263,3 +311,43 @@ Section state_wp_gp.
   Qed.
 
 
+
+  Lemma wp_alloc v (Ψ: nat -> iProp Σ):
+    (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc _ v) Ψ.
+  Proof.
+    iIntros "Hpost" (σ) "Hsi".
+    iMod (si_alloc with "Hsi") as "(Hsi' & Hpt)".
+    simpl.
+    pose (l:= fresh (dom (gset nat) σ)).
+    iModIntro. iExists l, (<[l := v]> σ).
+    iSplit.
+    - done.
+    - iDestruct ("Hpost" with "Hpt") as "$".
+      done.
+  Qed.
+
+  Lemma wp_free v l (Ψ: unit -> iProp Σ):
+    points_to γ l v -∗ Ψ tt -∗ state_wp (state_interp γ) (free _ l) Ψ.
+  Admitted.
+
+  Set Printing Coercions.
+  About uPred.pure_soundness.
+  About bupd_plain.
+  About own_alloc.
+  Print bi_emp_valid.
+
+  (*
+    alloc+ free.
+    adequacy.
+    Example programs.
+    abstract state.
+
+   *)
+  Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat nat) A) (st: gmap nat nat):
+    (* use unicode turnstile  update Iris.*)
+    (∀γ, True -∗ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
+    ∃ x st', runState prog st = Some (x, st') /\ Q x.
+    simpl. 
+    Admitted.
+
+  Lemma (prog : state (gmap nat nat) nat)
