@@ -251,6 +251,24 @@ Section state_wp_gp.
   SearchAbout dom.
   SearchAbout empty.
 
+  (*
+  How do I get own (◯ ∅) since that should be provable too?
+  Lemma si_alloc σ v:
+    let l := fresh (dom (gset nat) σ)
+    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
+  Proof.
+    iIntros "Hsi".
+    unfold state_interp. unfold points_to.
+    iApply own_op.
+    iApply (own_update).
+    -  apply auth_update. unfold lift_excl. rewrite fmap_insert. 
+       apply alloc_singleton_local_update.
+       + rewrite lookup_fmap. rewrite fresh_none. done.
+       + done. 
+    - unfold lift_excl. iApply own_op. iFrame.
+  Admitted. 
+ *)
+
   Lemma si_alloc σ v:
     let l := fresh (dom (gset nat) σ)
     in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
@@ -267,23 +285,26 @@ Section state_wp_gp.
     - unfold lift_excl.  done.
   Qed.
 
-  (* Lemma si_alloc σ v:
-    let l := fresh (dom (gset nat) σ)
-    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
-  Proof.
-    iIntros "Hsi".
-    unfold state_interp. unfold points_to.
-    iApply own_op.
-    iApply (own_update).
-    -  apply auth_update. unfold lift_excl. rewrite fmap_insert. 
-       apply alloc_singleton_local_update.
-       + rewrite lookup_fmap. rewrite fresh_none. done.
-       + done. 
-    - unfold lift_excl. iApply own_op. iFrame.
-  Admitted. 
 
-  How do I get own (◯ ∅) since that should be provable too?
- *)
+  SearchAbout fmap_delete.
+  About Exclusive.
+  Lemma si_free σ v l:
+   state_interp γ σ -∗ points_to γ l v ==∗ state_interp γ (delete l σ).
+  Proof.
+    iIntros "Hsi Hpt".
+    unfold state_interp. unfold points_to.
+    iApply (own_update).
+    - apply auth_update_dealloc.
+      unfold lift_excl. rewrite fmap_delete.
+      (* why can't i say x := (excl v) n := l*)
+      apply (@delete_singleton_local_update _ _ _ _ _ l (Excl v)).
+      (* Why do I need to show this type class my self *)
+      apply excl_exclusive.
+    - iApply own_op.
+      iFrame.
+  Qed.
+
+
   Lemma wp_load n v (Ψ: nat -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get _ n) Ψ.
   Proof.
@@ -326,9 +347,16 @@ Section state_wp_gp.
       done.
   Qed.
 
+  About si_free.
   Lemma wp_free v l (Ψ: unit -> iProp Σ):
     points_to γ l v -∗ Ψ tt -∗ state_wp (state_interp γ) (free _ l) Ψ.
-  Admitted.
+    iIntros "Hpt Hpost" (σ) "Hsi".
+    iMod (si_free with "Hsi Hpt") as "Hsi'".
+    iModIntro. iExists tt, (delete l σ).
+    iSplit.
+    - done.
+    - iFrame. 
+  Qed.
 
   Set Printing Coercions.
   About uPred.pure_soundness.
