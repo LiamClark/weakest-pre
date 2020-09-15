@@ -134,9 +134,9 @@ Section state_wp_gp.
   Locate "=".
   About Excl'.
   About Excl.
-  SearchAbout equiv f_equal.
-  SearchAbout LeibnizEquiv.
-  SearchAbout fmap f_equal.
+  Search equiv f_equal.
+  Search LeibnizEquiv.
+  Search fmap f_equal.
   About leibniz_equiv_iff.
   About f_equiv.
 
@@ -166,7 +166,7 @@ Section state_wp_gp.
     pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
     destruct (a H) as [H1 H2].
     iPureIntro.
-    pose (proj1 (singleton_included_exclusive (lift_excl σ) n (Excl v) _ H2) H1).
+    pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
     apply rewrite_lookups.
     assumption.
   Qed.
@@ -178,26 +178,26 @@ Section state_wp_gp.
   About own_valid_2.
   About own_update_2.
   (*usefull helper lemmas for deriving equality from validity*)
-  SearchAbout auth valid.
-  SearchAbout excl.
+  Search auth valid.
+  Search excl.
   About excl_valid.
   Print excl_valid.
   About auth_both_valid.
-  SearchAbout included gmap.
+  Search included gmap.
   About singleton_included_exclusive.
   About bi_iff.
   About bi_and.
   Locate "∧".
-  SearchAbout bi_iff.
-  SearchAbout bi_and.
-  SearchAbout fmap lookup.
+  Search bi_iff.
+  Search bi_and.
+  Search fmap lookup.
   About map_fmap_equiv_ext.
   About lookup_fmap.
   About map_fmap_ext.
   About Excl'.
 
   Locate "~~>".
-  SearchAbout cmra_update.
+  Search cmra_update.
   (* update both parts of a composition with a frame perserving update *)
   About cmra_update_op.
   About prod_local_update.
@@ -219,9 +219,9 @@ Section state_wp_gp.
 (*  Lemma fmap_l_update (m: gmap nat nat) (f: nat -> nat) (i x x' y y': nat):
     (m, {[i := y]}) ~l~> (<[i:=x']> m, {[i := y']}) ->
     (f <$> m, {[i := f y]}) ~l~> (f <$> <[i:=x']> m, {[i := f y']}). *)
-  SearchAbout fmap insert.
+  Search fmap insert.
   About exclusive_local_update.
-  SearchAbout excl_valid.
+  About excl_valid.
   Locate "✓".
 
   Lemma points_to_update σ n v w:
@@ -248,8 +248,8 @@ Section state_wp_gp.
   Locate "∉".
   Locate "∅". 
   Locate "◯".
-  SearchAbout dom.
-  SearchAbout empty.
+  Search dom.
+  Search empty.
 
   (*
   How do I get own (◯ ∅) since that should be provable too?
@@ -296,10 +296,9 @@ Section state_wp_gp.
     iApply (own_update).
     - apply auth_update_dealloc.
       unfold lift_excl. rewrite fmap_delete.
-      (* why can't i say x := (excl v) n := l*)
-      apply (@delete_singleton_local_update _ _ _ _ _ l (Excl v)).
-      (* Why do I need to show this type class my self *)
-      apply excl_exclusive.
+      (* why does this fail type class resolution? *)
+      (* apply delete_singleton_local_update with (x := Excl v). *)
+      apply (delete_singleton_local_update _ l (Excl v)).
     - iApply own_op.
       iFrame.
   Qed.
@@ -358,24 +357,39 @@ Section state_wp_gp.
     - iFrame. 
   Qed.
 
-  Set Printing Coercions.
-  About uPred.pure_soundness.
-  About bupd_plain.
-  About own_alloc.
-  Print bi_emp_valid.
+End state_wp_gp.
 
-  (*
-    alloc+ free.
-    adequacy.
-    Example programs.
-    abstract state.
+Set Printing Coercions.
+About uPred.pure_soundness.
+About bupd_plain.
+About own_alloc.
+About bi_emp_valid.
+Locate "⊢".
+About Excl.
+(*
+  alloc+ free.
+  adequacy.
+  Example programs.
+  abstract state.
 
-   *)
+ *)
+ Section state_ad.
+  Context `{! inG Σ (heapR natO)}.
+
   Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat nat) A) (st: gmap nat nat):
-    (* use unicode turnstile  update Iris.*)
-    (∀γ, True -∗ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
+    (∀γ, ⊢ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
     ∃ x st', runState prog st = Some (x, st') /\ Q x.
-    simpl. 
-    Admitted.
+  Proof.
+    iIntros (Hpre).
+    apply (uPred.pure_soundness (M := iResUR Σ)).
+    iMod (own_alloc (● (lift_excl st))) as (γ) "Hγ".
+    - apply auth_auth_valid. unfold lift_excl.
+    (*Done doesn't work here because the top level type is a map of which we take 
+      Exclusive elements of rather than owning a map exclusively. *) 
+    apply excl_valid. 
+
+    - iMod (Hpre γ $! st with "Hγ") as (x σ' ?) "(Hsi & %)".
+      eauto 10.
+  Admitted.
 
   Lemma (prog : state (gmap nat nat) nat)
