@@ -376,6 +376,10 @@ About Excl.
  Section state_ad.
   Context `{! inG Σ (heapR natO)}.
 
+
+  About cmra_valid.
+  About excl_valid.
+  Print gmap_valid.
   Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat nat) A) (st: gmap nat nat):
     (∀γ, ⊢ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
     ∃ x st', runState prog st = Some (x, st') /\ Q x.
@@ -383,13 +387,8 @@ About Excl.
     iIntros (Hpre).
     apply (uPred.pure_soundness (M := iResUR Σ)).
     iMod (own_alloc (● (lift_excl st))) as (γ) "Hγ".
-    - apply auth_auth_valid. unfold lift_excl.
-    (*Done doesn't work here because the top level type is a map of which we take 
-      Exclusive elements of rather than owning a map exclusively. *) 
-    apply excl_valid. 
-
+    - apply auth_auth_valid. iIntros (i). 
+      rewrite lookup_fmap. destruct (st !! i); done.
     - iMod (Hpre γ $! st with "Hγ") as (x σ' ?) "(Hsi & %)".
       eauto 10.
-  Admitted.
-
-  Lemma (prog : state (gmap nat nat) nat)
+  Qed.
