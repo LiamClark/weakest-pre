@@ -7,6 +7,10 @@ Record state (ST A: Type): Type := State {
 
 Arguments State {_ _} _.
 Arguments runState {_ _} _.
+
+Instance fmap_state: FMap (state ST)  :=
+  λ ST A B f fa, State $ λ st, (λ '(a, b), (f a , b)) <$> (runState fa st).
+
 Instance mret_state ST : MRet (state ST) := λ A a, State $ λ s, Some (a, s).
 
 Instance mbind_state ST: MBind (state ST) :=
@@ -16,13 +20,28 @@ Instance mbind_state ST: MBind (state ST) :=
                           | None => None
                           end.
 
+Section state_op.
+   Context {ST A: Type}.
+
+   Definition getS: state ST ST :=
+     State $ λ st, Some (st, st).
+  
+   Definition putS (x: ST): state ST unit :=
+     State $ λ st, Some (tt, x).
+
+   Definition fail: state ST A :=
+     State $ λ st, None.
+End state_op.
+
+
 Section gmap_state.
   Variable ST A: Type.
 
-
-  Print base.lookup.
   Definition get (n: nat): state (gmap nat A) A :=
     State $ λ (st: gmap nat A), (λ x, (x, st)) <$> lookup n st.
+
+  Definition get' (n: nat): state (gmap nat A) A. 
+    refine( _ <$> getS).
 
   Definition put (n: nat) (x : ST) : state (gmap nat ST) unit := State $ λ st, Some (tt, <[n:= x]> st).
 
