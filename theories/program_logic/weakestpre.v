@@ -111,24 +111,6 @@ Section state_wp_gp.
   Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
   Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
 
-
-  (*
-    I'm trying to prove that if I own an entire heap and I own a fragment of that heap then
-    Looking up the fragment in the heap will give me the value that corresponds to the fragment.
-
-    Robbert stated that the equality can be derived from the idea of validity.
-
-    The way to get from validity to equality is through singleton_included_exclusive.
-    Lets apply that first. It's hard to apply that since it is a pure statement, not one in a seperation logic context.
-    Instead let's try to build it's requirements, these are:
-    An x over which we have exclusive ownership, here: Excl v.
-    A map which is valid, we want: valid σ.
-    Then we have to show inclusion of the singleton in σ.
-
-    Step one: getting Valid of σ. Would be using own_valid on Hsi.
-    Step two: show inclusion of our singleton map in σ.
-              The lemma auth_both_valid gives us inclusion
-   *)
   About auth_both_valid.
   About singleton_included_exclusive.
   Locate "=".
@@ -171,13 +153,12 @@ Section state_wp_gp.
     assumption.
   Qed.
 
-   (* Todo state additional lemmas about the heap, alloc / store*)
-  (*usefull helper lemmas for combining owns *)
+  (*useful helper lemmas for combining owns *)
   About own_valid.
   About own_op.
   About own_valid_2.
   About own_update_2.
-  (*usefull helper lemmas for deriving equality from validity*)
+  (*useful helper lemmas for deriving equality from validity*)
   Search auth valid.
   Search excl.
   About excl_valid.
@@ -216,9 +197,6 @@ Section state_wp_gp.
     reflexivity.
   Qed.
 
-(*  Lemma fmap_l_update (m: gmap nat nat) (f: nat -> nat) (i x x' y y': nat):
-    (m, {[i := y]}) ~l~> (<[i:=x']> m, {[i := y']}) ->
-    (f <$> m, {[i := f y]}) ~l~> (f <$> <[i:=x']> m, {[i := f y']}). *)
   Search fmap insert.
   About exclusive_local_update.
   About excl_valid.
@@ -251,24 +229,6 @@ Section state_wp_gp.
   Search dom.
   Search empty.
 
-  (*
-  How do I get own (◯ ∅) since that should be provable too?
-  Lemma si_alloc σ v:
-    let l := fresh (dom (gset nat) σ)
-    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
-  Proof.
-    iIntros "Hsi".
-    unfold state_interp. unfold points_to.
-    iApply own_op.
-    iApply (own_update).
-    -  apply auth_update. unfold lift_excl. rewrite fmap_insert. 
-       apply alloc_singleton_local_update.
-       + rewrite lookup_fmap. rewrite fresh_none. done.
-       + done. 
-    - unfold lift_excl. iApply own_op. iFrame.
-  Admitted. 
- *)
-
   Lemma si_alloc σ v:
     let l := fresh (dom (gset nat) σ)
     in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
@@ -282,7 +242,7 @@ Section state_wp_gp.
        apply alloc_singleton_local_update.
        + rewrite lookup_fmap. rewrite fresh_none. done.
        + done. 
-    - unfold lift_excl.  done.
+    - unfold lift_excl. done.
   Qed.
 
 
@@ -304,7 +264,7 @@ Section state_wp_gp.
   Qed.
 
 
-  Lemma wp_load n v (Ψ: nat -> iProp Σ) :
+  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
   Proof.
     iIntros "Hpt ϕ" (σ) "HSi".
@@ -376,10 +336,10 @@ About Excl.
  Section state_ad.
   Context `{! inG Σ (heapR natO)}.
 
-
   About cmra_valid.
   About excl_valid.
   Print gmap_valid.
+
   Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat nat) A) (st: gmap nat nat):
     (∀γ, ⊢ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
     ∃ x st', runState prog st = Some (x, st') /\ Q x.
@@ -393,4 +353,29 @@ About Excl.
       eauto 10.
   Qed.
 
+  Definition prog_swap (l k: nat): state (gmap nat nat) unit := 
+    x ← get l ;
+    y ← get k ;
+    put l y ;; put k x.
+
+  Lemma swap_verif l k x y :
+   ∀γ Φ, points_to γ l x ∗ points_to γ k y -∗ 
+       (points_to γ l y ∗ points_to γ k x -∗ Φ tt) -∗
+       state_wp (state_interp γ) (prog_swap l k) Φ. 
+  Proof.
+    iIntros (γ Φ) "Hpre Hpost".
+    unfold prog_swap. 
+    iDestruct "Hpre" as "(Hlx & Hky)".
+    iApply wp_bind.
+    iApply (wp_get with "Hlx"). iIntros "Hlx".
+    iApply wp_bind.
+    iApply (wp_get with "Hky"). iIntros "Hky".
+    iApply wp_bind.
+    iApply (wp_put with "Hlx"). iIntros "Hly".
+    iApply (wp_put with "Hky"). iIntros "Hkx".
+    iApply ("Hpost" with "*").
+    iFrame.
+    Qed.
 End state_ad.
+
+
