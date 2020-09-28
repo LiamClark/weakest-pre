@@ -35,21 +35,30 @@ End state_op.
 
 
 Section gmap_state.
-  Variable ST A: Type.
-
-  Definition get (n: nat): state (gmap nat A) A :=
+  Definition get {A} (n: nat): state (gmap nat A) A :=
     State $ λ (st: gmap nat A), (λ x, (x, st)) <$> lookup n st.
 
-  Definition get' (n: nat): state (gmap nat A) A. 
-    refine( _ <$> getS).
+  Definition ret_fail {S A} (m: option A): state S A := 
+    match m with
+    | Some x => mret x
+    | None => fail
+    end.
 
-  Definition put (n: nat) (x : ST) : state (gmap nat ST) unit := State $ λ st, Some (tt, <[n:= x]> st).
+  Definition get' {A} (n: nat): state (gmap nat A) A :=
+    getS ≫= λ st, ret_fail $ lookup n st.
 
-  Definition alloc (v: ST) : state (gmap nat ST) nat :=
-    State $ λ st, let fresh := fresh $ dom (gset nat) st in
-                  Some (fresh, <[fresh:=v]> st).
+  Definition put {A} (n: nat) (x : A) : state (gmap nat A) unit :=
+    State $ λ st, Some (tt, <[n := x]> st).
 
-  Definition free (n: nat): state (gmap nat ST) unit :=
-    State $ λ st, Some (tt, delete n st).
+  Definition put' {A} (n: nat) (x : A) : state (gmap nat A) unit :=
+    getS ≫= λ st, putS $ <[n := x]> st.
+
+  Definition alloc {A} (v: A) : state (gmap nat A) nat :=
+    getS ≫= λ st, 
+                let fresh := fresh $ dom (gset nat) st
+                in putS $ <[fresh := v]> st ;; mret fresh.
+
+  Definition free {A} (n: nat): state (gmap nat A) unit :=
+    getS ≫= λ st, putS $ delete n st.
 
 End gmap_state.

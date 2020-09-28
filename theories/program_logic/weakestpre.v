@@ -305,7 +305,7 @@ Section state_wp_gp.
 
 
   Lemma wp_load n v (Ψ: nat -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get _ n) Ψ.
+    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
   Proof.
     iIntros "Hpt ϕ" (σ) "HSi".
     iModIntro. iExists v, σ .
@@ -319,7 +319,7 @@ Section state_wp_gp.
   Qed.
 
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put  _ n v') Ψ.
+    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put n v') Ψ.
   Proof.
     iIntros "Hpt ϕ" (σ) "HSi".
     iMod ((points_to_update  _ _ v v') with "HSi Hpt") as "Hup".
@@ -333,7 +333,7 @@ Section state_wp_gp.
 
 
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
-    (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc _ v) Ψ.
+    (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc v) Ψ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
     iMod (si_alloc with "Hsi") as "(Hsi' & Hpt)".
@@ -348,7 +348,7 @@ Section state_wp_gp.
 
   About si_free.
   Lemma wp_free v l (Ψ: unit -> iProp Σ):
-    points_to γ l v -∗ Ψ tt -∗ state_wp (state_interp γ) (free _ l) Ψ.
+    points_to γ l v -∗ Ψ tt -∗ state_wp (state_interp γ) (free l) Ψ.
     iIntros "Hpt Hpost" (σ) "Hsi".
     iMod (si_free with "Hsi Hpt") as "Hsi'".
     iModIntro. iExists tt, (delete l σ).
@@ -387,8 +387,10 @@ About Excl.
     iIntros (Hpre).
     apply (uPred.pure_soundness (M := iResUR Σ)).
     iMod (own_alloc (● (lift_excl st))) as (γ) "Hγ".
-    - apply auth_auth_valid. iIntros (i). 
+    - apply auth_auth_valid. intro i. 
       rewrite lookup_fmap. destruct (st !! i); done.
     - iMod (Hpre γ $! st with "Hγ") as (x σ' ?) "(Hsi & %)".
       eauto 10.
   Qed.
+
+End state_ad.
