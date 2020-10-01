@@ -31,18 +31,18 @@ Section state_op.
 
    Definition fail: state ST A :=
      State $ λ st, None.
+
+    Definition ret_fail {S A} (m: option A): state S A := 
+     match m with
+     | Some x => mret x
+     | None => fail
+     end.
 End state_op.
 
 
 Section gmap_state.
   Definition get {A} (n: nat): state (gmap nat A) A :=
     State $ λ (st: gmap nat A), (λ x, (x, st)) <$> lookup n st.
-
-  Definition ret_fail {S A} (m: option A): state S A := 
-    match m with
-    | Some x => mret x
-    | None => fail
-    end.
 
   Definition get' {A} (n: nat): state (gmap nat A) A :=
     getS ≫= λ st, ret_fail $ lookup n st.

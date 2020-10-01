@@ -72,6 +72,28 @@ Section state_wp.
     eauto with iFrame.
   Qed.
 
+  Print state_wp.
+  (* The way the post condition gets implied here seems, dodgy? *)
+  Lemma wp_getS Φ : (∀σ, SI σ -∗ SI σ ∗ Φ σ) -∗ state_wp SI (getS) Φ.
+  Proof.
+    iIntros "Hpost" (σ) "Hsi".
+    iDestruct ("Hpost" with "Hsi") as "Hpost".
+    iExists σ, σ. iModIntro.
+    iSplit.
+    - iPureIntro. done.
+    - iFrame. 
+  Qed.
+
+  (* Isn't this just another tautology? *)
+  Lemma wp_putS Φ σ' : (∀σ, SI σ -∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
+  Proof.
+    iIntros "Hpost" (σ) "Hsi".
+    iDestruct ("Hpost" with "Hsi") as "Hpost".
+    iExists tt, σ'. iModIntro.
+    iSplit.
+    - iPureIntro. done.
+    - iFrame.
+  Qed.
 
   (*Derived rules *)
   Lemma wp_mono {A} Φ Ψ (e: state ST A): (∀ v, Φ v ⊢ Ψ v) → state_wp SI e Φ ⊢ state_wp SI e Ψ.
