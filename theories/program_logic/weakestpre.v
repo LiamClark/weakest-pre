@@ -74,10 +74,10 @@ Section state_wp.
 
   Print state_wp.
   (* The way the post condition gets implied here seems, dodgy? *)
-  Lemma wp_getS Φ : (∀σ, SI σ -∗ SI σ ∗ Φ σ) -∗ state_wp SI (getS) Φ.
+  Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ state_wp SI (getS) Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
-    iDestruct ("Hpost" with "Hsi") as "Hpost".
+    iMod("Hpost" with "Hsi") as "Hpost".
     iExists σ, σ. iModIntro.
     iSplit.
     - iPureIntro. done.
@@ -85,10 +85,10 @@ Section state_wp.
   Qed.
 
   (* Isn't this just another tautology? *)
-  Lemma wp_putS Φ σ' : (∀σ, SI σ -∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
+  Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
-    iDestruct ("Hpost" with "Hsi") as "Hpost".
+    iMod ("Hpost" with "Hsi") as "Hpost".
     iExists tt, σ'. iModIntro.
     iSplit.
     - iPureIntro. done.
@@ -285,6 +285,17 @@ Section state_wp_gp.
       iFrame.
   Qed.
 
+  Lemma wp_get' n v (Ψ: nat -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get' n) Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    iApply wp_bind. iApply wp_getS.
+    iIntros (σ) "Hsi".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %->.
+    iIntros "{$Hsi} !>".
+    iApply wp_ret. by iApply "Hpost".
+  Qed.
+
 
   Lemma wp_get n v (Ψ: nat -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
@@ -298,6 +309,20 @@ Section state_wp_gp.
     - simpl.
       iDestruct ("ϕ" with "Hpt") as "$".
       iFrame.
+  Qed.
+
+  Lemma wp_put' n v v' (Ψ: unit -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put' n v') Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    unfold put'.
+    iApply wp_bind. iApply wp_getS.
+    iIntros (σ) "$". 
+    iModIntro.
+    iApply wp_putS.
+    iIntros (σ') "Hsi".
+    iMod ((points_to_update  _ _ v v') with "Hsi Hpt") as "Hup". 
+
   Qed.
 
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
@@ -380,6 +405,9 @@ About Excl.
     y ← get k ;
     put l y ;; put k x.
 
+  (*for linked lists 
+    https://gitlab.mpi-sws.org/iris/stdpp/-/blob/master/theories/countable.v#L21
+  *)
   Lemma swap_verif l k x y :
    ∀γ Φ, points_to γ l x ∗ points_to γ k y -∗ 
        (points_to γ l y ∗ points_to γ k x -∗ Φ tt) -∗
