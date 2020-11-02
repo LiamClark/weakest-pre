@@ -13,6 +13,8 @@ Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
           SI σ' ∗
           Φ a.
 
+About fixpoint. 
+
 Section state_wp.
   Context  {Σ} {ST} (SI: ST -> iProp Σ).
   Implicit Types P Q R: iProp Σ.
@@ -84,7 +86,25 @@ Section state_wp.
     - iFrame. 
   Qed.
 
-  (* Isn't this just another tautology? *)
+  Lemma wp_modifyS' {A} Φ (f: ST -> A * ST): 
+    (∀σ, SI σ ==∗ let '(x, σ') := f σ in SI σ' ∗ Φ x) -∗ state_wp SI (modifyS' f) Φ.
+  Proof.
+    iIntros "Hpost" (σ) "Hsi".
+    iMod ("Hpost" with "Hsi") as "Hpost".
+    destruct (f σ) as [x s'] eqn: E.
+    iExists x, s'.
+    iModIntro.
+    iSplit.
+    - unfold modifyS'. simpl. rewrite E. done.
+    - iFrame.
+  Qed.
+
+  Lemma wp_modifyS Φ f: (∀σ, SI σ ==∗ SI (f σ) ∗ Φ tt) -∗ state_wp SI (modifyS f) Φ.
+  Proof.
+    iIntros "Hpost". 
+    iApply wp_modifyS'. done.
+  Qed.
+
   Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
@@ -285,8 +305,8 @@ Section state_wp_gp.
       iFrame.
   Qed.
 
-  Lemma wp_get' n v (Ψ: nat -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get' n) Ψ.
+  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
   Proof.
     iIntros "Hpt Hpost".
     iApply wp_bind. iApply wp_getS.
@@ -296,73 +316,36 @@ Section state_wp_gp.
     iApply wp_ret. by iApply "Hpost".
   Qed.
 
-
-  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
-  Proof.
-    iIntros "Hpt ϕ" (σ) "HSi".
-    iModIntro. iExists v, σ .
-    iSplit.
-    - unfold runState. unfold get. unfold fmap.
-      iDestruct (si_points_to_agree with "HSi Hpt") as "%".
-      rewrite H. done.
-    - simpl.
-      iDestruct ("ϕ" with "Hpt") as "$".
-      iFrame.
-  Qed.
-
-  Lemma wp_put' n v v' (Ψ: unit -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put' n v') Ψ.
-  Proof.
-    iIntros "Hpt Hpost".
-    unfold put'.
-    iApply wp_bind. iApply wp_getS.
-    iIntros (σ) "$". 
-    iModIntro.
-    iApply wp_putS.
-    iIntros (σ') "Hsi".
-    iMod ((points_to_update  _ _ v v') with "Hsi Hpt") as "Hup". 
-
-  Qed.
-
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put n v') Ψ.
   Proof.
-    iIntros "Hpt ϕ" (σ) "HSi".
-    iMod ((points_to_update  _ _ v v') with "HSi Hpt") as "Hup".
-    iModIntro. iExists tt, (<[n:=v']> σ).
-    iSplit.
-    - done.
-    - iDestruct "Hup" as "($ & Hup')".
-      iApply ("ϕ" with "Hup'").
-  Qed.
-
-
+    iIntros "Hpt Hpost".
+    iApply wp_modifyS.
+    iIntros (σ) "Hsi". 
+    iMod (points_to_update with "Hsi Hpt") as "($ & Hup)". 
+    by iApply "Hpost".
+  Qed. 
 
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
     (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc v) Ψ.
   Proof.
-    iIntros "Hpost" (σ) "Hsi".
+    iIntros "Hpost". iApply wp_modifyS'.
+    iIntros (σ) "Hsi".
     iMod (si_alloc with "Hsi") as "(Hsi' & Hpt)".
-    simpl.
-    pose (l:= fresh (dom (gset nat) σ)).
-    iModIntro. iExists l, (<[l := v]> σ).
-    iSplit.
-    - done.
-    - iDestruct ("Hpost" with "Hpt") as "$".
-      done.
+    iModIntro.
+    iFrame.
+    iApply ("Hpost" with "Hpt").
   Qed.
 
-  About si_free.
   Lemma wp_free v l (Ψ: unit -> iProp Σ):
     points_to γ l v -∗ Ψ tt -∗ state_wp (state_interp γ) (free l) Ψ.
-    iIntros "Hpt Hpost" (σ) "Hsi".
-    iMod (si_free with "Hsi Hpt") as "Hsi'".
-    iModIntro. iExists tt, (delete l σ).
-    iSplit.
-    - done.
-    - iFrame. 
+  Proof.
+    iIntros "Hpt Hpost". iApply wp_modifyS.
+    iIntros (σ) "Hsi".
+    iMod (si_free with "Hsi Hpt") as "$".
+    done.
   Qed.
+
 
 End state_wp_gp.
 

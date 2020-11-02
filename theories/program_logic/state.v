@@ -20,6 +20,10 @@ Instance mbind_state ST: MBind (state ST) :=
                           | None => None
                           end.
 
+
+Definition modifyS' {A ST} (f: ST -> A * ST): state ST A :=
+  State $ λ st, Some $ f st.
+
 Section state_op.
    Context {ST A: Type}.
 
@@ -29,10 +33,13 @@ Section state_op.
    Definition putS (x: ST): state ST unit :=
      State $ λ st, Some (tt, x).
 
+   Definition modifyS (f: ST -> ST): state ST () :=
+     modifyS' $ λ st, (tt, f st).
+
    Definition fail: state ST A :=
      State $ λ st, None.
 
-    Definition ret_fail {S A} (m: option A): state S A := 
+    Definition ret_fail (m: option A): state ST A := 
      match m with
      | Some x => mret x
      | None => fail
@@ -42,23 +49,16 @@ End state_op.
 
 Section gmap_state.
   Definition get {A} (n: nat): state (gmap nat A) A :=
-    State $ λ (st: gmap nat A), (λ x, (x, st)) <$> lookup n st.
-
-  Definition get' {A} (n: nat): state (gmap nat A) A :=
     getS ≫= λ st, ret_fail $ lookup n st.
 
   Definition put {A} (n: nat) (x : A) : state (gmap nat A) unit :=
-    State $ λ st, Some (tt, <[n := x]> st).
-
-  Definition put' {A} (n: nat) (x : A) : state (gmap nat A) unit :=
-    getS ≫= λ st, putS $ <[n := x]> st.
+    modifyS <[n := x]>.
 
   Definition alloc {A} (v: A) : state (gmap nat A) nat :=
-    getS ≫= λ st, 
+    modifyS'$ λ st, 
                 let fresh := fresh $ dom (gset nat) st
-                in putS $ <[fresh := v]> st ;; mret fresh.
+                in (fresh, <[fresh := v]> st). 
 
   Definition free {A} (n: nat): state (gmap nat A) unit :=
-    getS ≫= λ st, putS $ delete n st.
-
+    modifyS $ delete n.
 End gmap_state.
