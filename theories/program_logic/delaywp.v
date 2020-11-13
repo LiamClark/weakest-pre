@@ -46,7 +46,7 @@ Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
 
 Definition wp_delay_pre {Σ} {A} (go: delay A -d> (A -d> iPropO Σ) -d> iPropO Σ):
       delay A -d> (A -d> iPropO Σ) -d> iPropO Σ.
-refine(λ e Φ, match e with
+refine(λ e Φ, |==> match e with
               | Answer x => Φ x
               | Think e' => ▷ go e' Φ
               end
@@ -80,7 +80,8 @@ Qed.
 Lemma wp_delay_return {Σ A}(x: A) (Φ: A -> iProp Σ): Φ x -∗ wp_delay (Answer x) Φ.
 Proof.
    rewrite wp_delay_unfold.
-   done.
+   iIntros "H".
+   iModIntro. done.
 Qed.
 
 Lemma wp_delay_bind {Σ A B} (f: A -> delay B) (Φ: B -> iProp Σ) (e: delay A): 
@@ -91,9 +92,11 @@ Proof.
   iEval (rewrite wp_delay_unfold).
   unfold wp_delay_pre.
   destruct e; simpl.
-  - rewrite wp_delay_unfold /=. rewrite wp_delay_unfold /=.
+  - rewrite wp_delay_unfold /=. iMod "H" as "H". rewrite wp_delay_unfold /=.
     unfold wp_delay_pre. done.
   - iEval (rewrite wp_delay_unfold /=) in "H".
+    iMod "H" as "H".
+    iModIntro.
     iNext. iApply "IH". done.
 Qed.
 
@@ -105,13 +108,12 @@ Proof.
 Qed.
 
 (* 
-  change to delay.
-  proof bind.
   get load store.
   iter combinators.
+  Programs.
 *)
-Lemma wp_strong_mono {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
-  wp_delay e Φ -∗ (∀ v, Φ v -∗ Ψ v) -∗ wp_delay e Ψ.
+Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
+  wp_delay e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp_delay e Ψ.
 Proof.
   iLöb as "IH" forall (e).
   rewrite wp_delay_unfold.
@@ -119,29 +121,70 @@ Proof.
   iIntros "Hwp H".
   unfold wp_delay_pre.
   destruct e; simpl.
-  - iApply ("H" with "Hwp").
-  - iNext. iApply ("IH" $! e with "Hwp H"). 
+  - iMod "Hwp" as "Hwp". iApply ("H" with "Hwp").
+  - iMod "Hwp" as "Hwp". iModIntro.
+    iNext. iApply ("IH" $! e with "Hwp H"). 
+Qed.
+
+Lemma wp_strong_mono {Σ A ST SI} (e: state_delay ST A) (Φ Ψ : A -> iProp Σ):
+  wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ .
+Proof.
+  unfold wp.
+  iIntros "Hwp H" (σ) "HSi".
+  iDestruct ("Hwp" with "HSi") as "Hwp".
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros ([[s x] | ]). 
+  - iIntros "(Hpost & $)".
+    by iApply "H".
+  - done.
+Qed.
+
+Lemma bupd_wp_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : (|==> wp_delay e Φ) ⊢ wp_delay e Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite wp_delay_unfold.
+  unfold wp_delay_pre.
+  by iMod "Hwp" as "Hwp".
+Qed.
+
+Lemma wp_bupd_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : wp_delay e (λ v, |==> Φ v) ⊢ wp_delay e Φ.
+Proof.
+  iIntros "Hwp".
+  iApply (wp_strong_mono_delay with "Hwp").
+  auto.
+Qed.
+
+Lemma bupd_wp {Σ A ST SI} (e: state_delay ST A) (Φ : A -> iProp Σ): (|==> wp SI e Φ) ⊢ wp SI e Φ.
+Proof.
+  iIntros "Hwp".
+  unfold wp. iIntros (σ) "Hsi". 
+  by iMod ("Hwp" with "Hsi").
+Qed.
+
+Lemma wp_bupd {Σ A ST SI} (e: state_delay ST A) (Φ : A -> iProp Σ): wp SI e (λ v, |==> Φ v) ⊢ wp SI e Φ.
+Proof.
+  iIntros "Hwp".
+  iApply (wp_strong_mono with "Hwp").
+  auto.
 Qed.
 
 Locate "|==>".
 Print bupd.
-Lemma wp_state_bind {Σ A B ST} {SI: ST -> iProp Σ} (f: A -> state_delay ST B) (Φ: B -> iProp Σ) (e: state_delay ST A): 
-  wp SI e (λ x, wp SI (f x) Φ) -∗ wp SI (e ≫= f) Φ.
+Lemma wp_state_bind {Σ A B ST} {SI: ST -> iProp Σ}
+  (f: A -> state_delay ST B)
+  (Φ: B -> iProp Σ)
+  (e: state_delay ST A)
+  : wp SI e (λ x, wp SI (f x) Φ) -∗ wp SI (e ≫= f) Φ.
 Proof.
   iIntros "H" (σ) "HSi". rewrite /mbind /mbind_state_delay /=.
   iApply wp_delay_bind.
   iMod ("H" with  "HSi") as "H".
   iModIntro.
-  iApply (wp_strong_mono with "[H]").
-  - done.
-  - iIntros (v).
-    destruct v.
-    + destruct p. iIntros "(Hwp & HSi)".
-      (* Stuck with an update modality here from wp (state)
-       can we do wp_strong_mono with an update modality?
-       No we can't because wp_delay does not have an update modality in it's definition *)
-      unfold wp. iSpecialize ("Hwp" $! (s) with "HSi").
-
-    +
-
-About fixpoint. 
+  iApply (wp_strong_mono_delay with "H").
+  iIntros ([[s x] | ]).
+  - iIntros "(Hwp & HSi)".
+    unfold wp. iApply ("Hwp" $! (s) with "HSi").
+  - iIntros "_ !>".
+    by iApply wp_delay_return.
+Qed.
+About fixpoint.
