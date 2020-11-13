@@ -1,15 +1,10 @@
 From stdpp Require Import list base gmap fin_sets fin_map_dom.
 Require Import Unicode.Utf8.
 
-
-(*Contains the entire build up from the simplest delay monad to
- StateT s $  OptionT Delay with fuel based evaluators for testing
- and supporting all heap operations previously used in our weakest pre definitions.
- *)
-Section delay.
-  CoInductive delay (A: Type): Type :=
-  | Answer: A -> delay A
-  | Think: delay A -> delay A.
+(*First we define the delay monad and it's looping combinators *)
+CoInductive delay (A: Type): Type :=
+| Answer: A -> delay A
+| Think: delay A -> delay A.
 
 Arguments Answer {_}.
 Arguments Think {_}.
@@ -39,7 +34,7 @@ Instance mbind_delay : MBind delay :=
 
 CoFixpoint iter {A B} (body: A -> delay (A + B)) : A -> delay B.
 refine (λ a, body a ≫= (λ ab,
-              match ab with (* This is not actually guarded, are they lying in the paper? *)
+              match ab with 
               | inl a => Think (iter _ _ body a)
               | inr b => Answer b
               end 
@@ -64,98 +59,13 @@ refine (λ a, iter
          (inr a)).
 Defined.
 
-(*Example programs *)
-Definition fib' (st: nat * nat * nat): delay ((nat * nat * nat) + nat).
-refine(match st with
-|(0, x, y) => Answer $ inr $ x
-|((S n), x, y) => Answer $ inl (n, y, x + y)
-end).
-Defined.
-
-Definition fib (n: nat): delay nat := iter fib' (n, 0, 1).
-
-
-Fixpoint ev_delay {A} (n: nat) (ma: delay A): option A :=
-  match n with
-  | O => None
-  | S n' => match ma with
-            | Answer x => Some x
-            | Think ma' => ev_delay n' ma'
-            end
-  end.
-
-Lemma test_fib: (λ n, ev_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
-Proof.
-  reflexivity.
-Qed.
-
-
-Definition state (ST A: Type) : Type := ST -> delay (ST * A).
-
-Instance mret_state ST : MRet (state ST) := λ A a s, Answer (s, a).
-
-Instance mbind_state ST: MBind (state ST) :=
-  λ _ _ f ma st, 
-          TBind (λ '(s', x), f x s') (ma st). 
-
-Definition put' {ST} (s: ST): state ST () :=
-    λ _, Answer (s, tt).
-
-Definition get' {ST} : state ST ST :=
-  λ s, Answer (s, s).
-
-Definition distribute_delay {ST A B} (msab: delay (ST * (A + B))): delay (ST * A + ST * B) :=
-  (λ '(s, ab), match ab with
-                |inl a => inl (s, a)
-                |inr b => inr (s, b)
-                end
-  ) <$> msab.
-
-Definition iter_state {A B ST} (body: A -> state ST (A + B)) : A -> state ST B :=
-  λ a s, iter
-     (λ '(s', a'), distribute_delay $ body a' s' )
-     (s, a).
-
-
-Fixpoint eval_state {ST A} (n: nat) (ma: state ST A) {struct n} : ST -> option A.
-refine(λ s,
-        match n with
-        | S n' =>
-          match ma s with
-            | Answer (s', a) => Some a
-            | Think m' => eval_state _ _ n' (λ _, m')  s
-             (*This bothers me, it seems to indicate that state would be lost between recursive steps?*)
-          end 
-        | O => None
-        end
-      ).
-Defined.
-
-Definition iter_body (n: nat): state nat (nat + nat).
-refine(get' ≫= λ s, match s with
-                     | O => mret $ inr n
-                     | S s' => put' s' ;; mret $ inl $ n + s
-                     end
-).
-Defined.
-
-Lemma test_state: eval_state 10 (iter_state (iter_body) 0) 5 = Some 15.
-Proof.
-  reflexivity.
-Qed.
-
-(* however this seems to work? WTF?*)
-Lemma test_state': eval_state 10 (iter_state iter_body 0 ;; get') 5 = Some 0.
-Proof.
-  reflexivity.
-Qed. 
-
+(*Now we define our computations in terms of StateT ST (OptionT Delay) *)
 Record state_delay (ST A: Type) : Type := State {
   runState: ST -> delay $ option (ST * A)
 }.
 
-Arguments State {_ _} _.
-Arguments runState {_ _} _.
+Arguments State {_ _}.
+Arguments runState {_ _}.
 
 
 Instance mret_state_delay ST : MRet (state_delay ST) :=
@@ -244,6 +154,11 @@ Definition alloc {A} (v: A) : state_delay (gmap nat A) nat :=
 Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
   modifyS $ delete n.
 
+Definition eval_state_delay' {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
+refine(λ st, fmap snd $ mjoin $ ev_delay n $ runState ma st).
+Defined.
+
+
 (*Differentiate between none and running out of fuel
   The state passing here is funky too.
 *)
@@ -259,14 +174,105 @@ refine (λ st,
 end).
 Defined.
 
+
+
+(*
+  Example programs and intermediate steps
+ *)
+Section delay.
+
+(*Example programs *)
+Definition fib' (st: nat * nat * nat): delay ((nat * nat * nat) + nat).
+refine(match st with
+|(0, x, y) => Answer $ inr $ x
+|((S n), x, y) => Answer $ inl (n, y, x + y)
+end).
+Defined.
+
+Definition fib (n: nat): delay nat := iter fib' (n, 0, 1).
+
+
+Fixpoint ev_delay {A} (n: nat) (ma: delay A): option A :=
+  match n with
+  | O => None
+  | S n' => match ma with
+            | Answer x => Some x
+            | Think ma' => ev_delay n' ma'
+            end
+  end.
+
+Lemma test_fib: (λ n, ev_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
+Proof.
+  reflexivity.
+Qed.
+
+
+Definition state (ST A: Type) : Type := ST -> delay (ST * A).
+
+Instance mret_state ST : MRet (state ST) := λ A a s, Answer (s, a).
+
+Instance mbind_state ST: MBind (state ST) :=
+  λ _ _ f ma st, 
+          TBind (λ '(s', x), f x s') (ma st). 
+
+Definition put' {ST} (s: ST): state ST () :=
+    λ _, Answer (s, tt).
+
+Definition get' {ST} : state ST ST :=
+  λ s, Answer (s, s).
+
+Definition distribute_delay {ST A B} (msab: delay (ST * (A + B))): delay (ST * A + ST * B) :=
+  (λ '(s, ab), match ab with
+                |inl a => inl (s, a)
+                |inr b => inr (s, b)
+                end
+  ) <$> msab.
+
+Definition iter_state {A B ST} (body: A -> state ST (A + B)) : A -> state ST B :=
+  λ a s, iter
+     (λ '(s', a'), distribute_delay $ body a' s' )
+     (s, a).
+
+
+Fixpoint eval_state {ST A} (n: nat) (ma: state ST A) {struct n} : ST -> option A.
+refine(λ s,
+        match n with
+        | S n' =>
+          match ma s with
+            | Answer (s', a) => Some a
+            | Think m' => eval_state _ _ n' (λ _, m')  s
+             (*This bothers me, it seems to indicate that state would be lost between recursive steps?*)
+          end 
+        | O => None
+        end
+      ).
+Defined.
+
+Definition iter_body (n: nat): state nat (nat + nat).
+refine(get' ≫= λ s, match s with
+                     | O => mret $ inr n
+                     | S s' => put' s' ;; mret $ inl $ n + s
+                     end
+).
+Defined.
+
+Lemma test_state: eval_state 10 (iter_state (iter_body) 0) 5 = Some 15.
+Proof.
+  reflexivity.
+Qed.
+
+(* however this seems to work? WTF?*)
+Lemma test_state': eval_state 10 (iter_state iter_body 0 ;; get') 5 = Some 0.
+Proof.
+  reflexivity.
+Qed. 
+
+
 Check fst.
 (* This should illustrate the state passing better. We first run the state effect
    Then the think notes implicitly somehow capture the state passing in the iteration constructs 
 *)
 
-Definition eval_state_delay' {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
-refine(λ st, fmap snd $ mjoin $ ev_delay n $ runState ma st).
-Defined.
 
 Definition iter_adder (l k: nat): () -> state_delay (gmap nat nat) (() + nat) :=
   λ _, x  ← get l ;
