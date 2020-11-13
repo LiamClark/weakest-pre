@@ -66,7 +66,7 @@ refine(∀ σ,
     SI σ ==∗
      wp_delay (runState e σ) (λ (res: option (ST * A)), 
        match res with   
-       | Some (σ', x) => Φ x ∗ SI σ'
+       | Some (σ', x) => SI σ' ∗ Φ x 
        | None => True
        end)
 )%I.
@@ -107,11 +107,6 @@ Proof.
   iApply wp_delay_return. by iFrame.
 Qed.
 
-(* 
-  get load store.
-  iter combinators.
-  Programs.
-*)
 Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
   wp_delay e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp_delay e Ψ.
 Proof.
@@ -134,7 +129,7 @@ Proof.
   iDestruct ("Hwp" with "HSi") as "Hwp".
   iApply (wp_strong_mono_delay with "Hwp").
   iIntros ([[s x] | ]). 
-  - iIntros "(Hpost & $)".
+  - iIntros "($ & HPost)".
     by iApply "H".
   - done.
 Qed.
@@ -182,9 +177,186 @@ Proof.
   iModIntro.
   iApply (wp_strong_mono_delay with "H").
   iIntros ([[s x] | ]).
-  - iIntros "(Hwp & HSi)".
+  - iIntros "(HSi & Hwp)".
     unfold wp. iApply ("Hwp" $! (s) with "HSi").
   - iIntros "_ !>".
     by iApply wp_delay_return.
 Qed.
-About fixpoint.
+
+Section state_wp.
+  Context  {Σ} {ST} (SI: ST -> iProp Σ).
+
+Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ wp SI (getS) Φ.
+Proof.
+  iIntros "Hpost" (σ) "Hsi".
+  iMod ("Hpost" with "Hsi") as "Hpost".
+  by iApply wp_delay_return.
+Qed.
+
+Lemma wp_modifyS' {A} Φ (f: ST -> ST * A): 
+  (∀σ, SI σ ==∗ let '(σ', x) := f σ in SI σ' ∗ Φ x) -∗ wp SI (modifyS' f) Φ.
+Proof.
+  iIntros "Hpost" (σ) "Hsi".
+  iMod ("Hpost" with "Hsi") as "Hpost /=".
+  destruct (f σ) as [x s'].
+  by iApply wp_delay_return.
+Qed.
+
+Lemma wp_modifyS Φ f: (∀σ, SI σ ==∗ SI (f σ) ∗ Φ tt) -∗ wp SI (modifyS f) Φ.
+Proof.
+  iIntros "Hpost". 
+  iApply wp_modifyS'. done.
+Qed.
+
+Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ wp SI (putS σ') Φ.
+Proof.
+  iIntros "Hpost" (σ) "Hsi".
+  iMod ("Hpost" with "Hsi") as "Hpost /=".
+  by iApply wp_delay_return.
+Qed.
+End state_wp.
+
+(*Heap rules *)
+Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+
+Lemma fresh_none (σ: gmap nat nat): 
+  let l := fresh (dom (gset nat) σ)
+  in σ !! l = None.
+Proof.
+  apply (not_elem_of_dom (D := gset nat)).
+  apply is_fresh.
+Qed.
+
+Section state_wp_gp.
+  Context `{! inG Σ (heapR natO)}.
+
+ (* Now come the rule that needs the points to connective in their weakest pre definition.
+     We therefore first define this in terms of the Authorative camera.
+   *)
+
+  Definition points_to (γ: gname) (n: nat) (v: nat): iProp Σ :=
+    own γ ( ◯ {[ n := Excl v ]}).
+
+  Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
+  Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
+  Context (γ: gname).
+
+  Lemma rewrite_lookups σ n v : lift_excl σ !! n ≡ Excl' v -> (σ !! n) = Some v.
+  Proof.
+    intros H.
+    rewrite (lookup_fmap Excl σ n) in H.
+    destruct (leibniz_equiv_iff (Excl <$> σ !! n) (Excl' v)).
+    apply H0 in H.
+    destruct (σ !! n) eqn: E.
+    - injection H. auto.
+    - done.
+  Qed.
+
+  Lemma si_points_to_agree σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
+  Proof.
+    iIntros "Hsi Hpt".
+    unfold state_interp. unfold points_to.
+    iDestruct (own_valid_2 with "Hsi Hpt") as "%".
+    pose (cmr := (gmapUR nat (exclR natO))).
+    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    destruct (a H) as [H1 H2].
+    iPureIntro.
+    pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
+    apply rewrite_lookups.
+    assumption.
+  Qed.
+
+  Lemma lift_excl_some σ n v: σ !! n = Some v -> lift_excl σ !! n = Some (Excl v).
+  Proof.
+    intro H.
+    rewrite lookup_fmap. rewrite H.
+    reflexivity.
+  Qed.
+
+  Lemma points_to_update σ n v w:
+    state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
+  Proof.
+    iIntros "Hsi Hpt".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as "%".
+    unfold state_interp. unfold points_to.
+    iApply own_op.
+    iApply (own_update_2 with "Hsi Hpt").
+    apply auth_update. unfold lift_excl.
+    rewrite fmap_insert.
+    eapply singleton_local_update.
+    * apply lift_excl_some. apply H.
+    * apply exclusive_local_update.
+      done.
+    Qed.
+
+  Lemma si_alloc σ v:
+    let l := fresh (dom (gset nat) σ)
+    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
+  Proof.
+    iIntros "Hsi".
+    iApply own_op.
+    iApply (own_update with "Hsi").
+    -  apply auth_update_alloc.
+       unfold lift_excl. rewrite fmap_insert. 
+       apply alloc_singleton_local_update.
+       + rewrite lookup_fmap. rewrite fresh_none. done.
+       + done. 
+  Qed.
+
+  Lemma si_free σ v l:
+   state_interp γ σ -∗ points_to γ l v ==∗ state_interp γ (delete l σ).
+  Proof.
+    iIntros "Hsi Hpt".
+    iApply (own_update).
+    - apply auth_update_dealloc.
+      unfold lift_excl. rewrite fmap_delete.
+      apply (delete_singleton_local_update _ l (Excl v)).
+    - iApply own_op.
+      iFrame.
+  Qed.
+
+  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (get n) Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    iApply wp_state_bind. iApply wp_getS.
+    iIntros (σ) "Hsi".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %->.
+    iIntros "{$Hsi} !>".
+    iApply wp_state_return. by iApply "Hpost".
+  Qed.
+
+  Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ wp (state_interp γ) (put n v') Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    iApply wp_modifyS.
+    iIntros (σ) "Hsi". 
+    iMod (points_to_update with "Hsi Hpt") as "($ & Hup)". 
+    by iApply "Hpost".
+  Qed. 
+
+  Lemma wp_alloc v (Ψ: nat -> iProp Σ):
+    (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) (alloc v) Ψ.
+  Proof.
+    iIntros "Hpost". iApply wp_modifyS'.
+    iIntros (σ) "Hsi".
+    iMod (si_alloc with "Hsi") as "($ & Hpt)".
+    iApply ("Hpost" with "Hpt").
+  Qed.
+
+  Lemma wp_free v l (Ψ: unit -> iProp Σ):
+    points_to γ l v -∗ Ψ tt -∗ wp (state_interp γ) (free l) Ψ.
+  Proof.
+    iIntros "Hpt Hpost". iApply wp_modifyS.
+    iIntros (σ) "Hsi".
+    iMod (si_free with "Hsi Hpt") as "$".
+    done.
+  Qed.
+End state_wp_gp.
+
+(* 
+  iter combinators. ask robbert for the rules for the looping combinators in Iris.
+  Programs.
+*)
+
