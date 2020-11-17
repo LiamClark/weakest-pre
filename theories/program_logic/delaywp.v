@@ -100,6 +100,91 @@ Proof.
     iNext. iApply "IH". done.
 Qed.
 
+(* Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (inv: A -> iProp Σ)
+  (f: A -> delay (A + B))
+  : inv x -∗
+    (*if we loop again we need to re-establish the wp *)
+   (∀y, ⌜f x = Answer (inl y)⌝ -∗ inv x -∗ wp_delay (iter f y) Φ) -∗ 
+   (∀z, ⌜f x = Answer (inr z)⌝ -∗ inv x -∗ Φ z) -∗
+   wp_delay (iter f x) Φ.
+Proof.
+  iIntros "Hinv Hinvest HPost".
+  rewrite wp_delay_unfold /=. 
+  destruct (f x) as [a | t] eqn: E.
+  - admit.
+  -  iEval (unfold wp_delay_pre).
+iEval (unfold iter).
+    (*  *) 
+   iModIntro. iNext.
+   (* iDestruct ("IH" with "Hinv Hinvest HPost") as "IH'". *)
+
+Qed. *)
+
+ CoFixpoint f (n: nat) : delay (nat + nat) :=
+   Think $ f n.
+
+(*So how does this baby work? The idea is to adapt the 
+  wp rules for while loops to iter.
+  from: https://en.wikipedia.org/wiki/Predicate_transformer_semantics#While_loop
+  Normally for a loops a loop invariant is established
+  (here we can have that be supplied hopefully?)
+  The loop invariant should establish the weakestpre for the loop,
+  again for the next iteration if f terminates in an inl
+
+  The loop invariant given the fact that f terminates in an inr
+  should establish the post condition.
+
+  The problem is that I can't properly establish whether f x gives
+  an inl or an inr. The way I have it set up now requires it to
+  be an answer immeadieately, but that's not the only way.
+  For example:
+
+  Definition f (n: nat) : delay (nat + nat) :=
+    Think $ Answer $ inr n.
+  
+  This clearly terminates to a inr but that's not usable with our loop invariant.
+  So I need to account for stacks of thinks that evantually give an inl or an inr
+  in those lemmas.
+  That together with this example:
+
+  CoFixpoint diverge (n: nat) : delay (nat + nat) :=
+    Think $ f n.
+
+  Means that the condition could just diverge. It seems like I need a big step
+  evaluation of the condition and it's simply not available to me?
+ *)
+Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (inv: A -> iProp Σ)
+  (f: A -> delay (A + B))
+  : inv x -∗
+    (*if we loop again we need to re-establish the wp *)
+   (∀y, ⌜f x = Answer (inl y)⌝ -∗ inv x -∗ wp_delay (iter f y) Φ) -∗ 
+   (∀z, ⌜f x = Answer (inr z)⌝ -∗ inv x -∗ Φ z) -∗
+   wp_delay (iter f x) Φ.
+Proof.
+  iIntros "Hinv Hinvest HPost".
+  iLöb as "IH". (* forall() *)
+  rewrite wp_delay_unfold /=. 
+  iEval (unfold iter). iEval (unfold wp_delay_pre).
+  destruct (f x) as [a | t] eqn: E.
+  - simpl. destruct a.
+    +
+     iAssert (⌜Answer (inl a) = Answer (inl a)⌝%I) as "Hl". done.
+     iApply ("Hinvest" $! a with "Hl Hinv"). 
+    +
+     iAssert (⌜Answer (inr b) = Answer (inr b)⌝%I) as "Hd". done.
+     iApply ("HPost" $! b with "Hd Hinv").
+  -  
+   (*  *) 
+   iModIntro. iNext.
+   (* iDestruct ("IH" with "Hinv Hinvest HPost") as "IH'". *)
+
+Qed.
+
+
 Lemma wp_state_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
 Proof.
   iIntros "H" (σ) "HSi".
@@ -353,6 +438,16 @@ Section state_wp_gp.
     iMod (si_free with "Hsi Hpt") as "$".
     done.
   Qed.
+
+
+  
+  (*
+    iter: (A -> delay_state (A + B))  -> A -> delay_state B
+   *)
+  Lemma wp_state_delay_iter A B Φ 
+    (x: A)
+    (f: A -> state_delay (gmap nat nat) (A + B))
+    : True -∗ wp (state_interp γ) (iter_state_delay f x) Φ.
 End state_wp_gp.
 
 (* 

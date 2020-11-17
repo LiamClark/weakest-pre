@@ -154,26 +154,19 @@ Definition alloc {A} (v: A) : state_delay (gmap nat A) nat :=
 Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
   modifyS $ delete n.
 
-Definition eval_state_delay' {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
+Fixpoint ev_delay {A} (n: nat) (ma: delay A): option A :=
+  match n with
+  | O => None
+  | S n' => match ma with
+            | Answer x => Some x
+            | Think ma' => ev_delay n' ma'
+            end
+  end.
+
+
+Definition eval_state_delay {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
 refine(λ st, fmap snd $ mjoin $ ev_delay n $ runState ma st).
 Defined.
-
-
-(*Differentiate between none and running out of fuel
-  The state passing here is funky too.
-*)
-Fixpoint eval_state_delay {ST A} (n: nat) (ma: state_delay ST A) {struct n}: ST -> option A.
-refine (λ st, 
-  match n with
-        | S n' => match runState ma st with
-                  | Answer (Some (s, x)) => Some x
-                  | Answer None => None
-                  | Think ma' => eval_state_delay _ _ n' (State $ λ _, ma') st
-                  end
-        | O => None
-end).
-Defined.
-
 
 
 (*
@@ -192,14 +185,6 @@ Defined.
 Definition fib (n: nat): delay nat := iter fib' (n, 0, 1).
 
 
-Fixpoint ev_delay {A} (n: nat) (ma: delay A): option A :=
-  match n with
-  | O => None
-  | S n' => match ma with
-            | Answer x => Some x
-            | Think ma' => ev_delay n' ma'
-            end
-  end.
 
 Lemma test_fib: (λ n, ev_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
 Proof.
@@ -282,7 +267,7 @@ Definition iter_adder (l k: nat): () -> state_delay (gmap nat nat) (() + nat) :=
 
 
 Definition init_state: gmap nat nat := (<[1 := 1]> (<[0 := 5]> ∅)).
-Lemma test_gmap_adder: eval_state_delay' 10 (iter_state_delay (iter_adder 0 1) tt) init_state = Some 6.
+Lemma test_gmap_adder: eval_state_delay 10 (iter_state_delay (iter_adder 0 1) tt) init_state = Some 6.
 Proof.
   reflexivity.
 Qed.
