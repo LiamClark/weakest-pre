@@ -181,9 +181,44 @@ Proof.
    (*  *) 
    iModIntro. iNext.
    (* iDestruct ("IH" with "Hinv Hinvest HPost") as "IH'". *)
+Admitted.
 
+(*    
+  it seems like the normal while loop wp rule can be proven here since
+  for a pure arrow we can actually inspect the loop conditon.
+  
+  What would be more tricky is figuring out how to lift a stateful computation
+  to here. Especially since state_delay wouldn't entirely be the right type,
+  that immeadeately includes state again.
+  So I want: iter_state(body: A -> stateT option (A + B)): A -> state_delay B.
+
+  Lastly it is important to remember that for interaction trees this seperation
+  of non-termination can't be done. Because the itree type contains all the other effects that could occur.
+  hence there iter is and always will be:
+    Definition iter (A -> iTree E (A + B)) : A -> iTree E B.
+*)
+Lemma wp_delay_iter_pure {Σ A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (inv: A -> iProp Σ)
+  (f: A -> A + B)
+  : inv x -∗
+    (*if we loop again we need to re-establish the wp *)
+   (∀y, ⌜f x = inl y⌝ -∗ inv x -∗ wp_delay (iter_pure f y) Φ) -∗ 
+   (∀z, ⌜f x = inr z⌝ -∗ inv x -∗ Φ z) -∗
+   wp_delay (iter_pure f x) Φ.
+Proof.
+  iIntros "Hinv Hinvest HPost".
+  iLöb as "IH". (* forall() *)
+  rewrite wp_delay_unfold /=. 
+  iEval (unfold iter_pure). iEval (unfold wp_delay_pre).
+  destruct (f x) as [a | b] eqn: E.
+  - simpl. 
+    iAssert (⌜inl a = inl a⌝%I) as "Hl". done.
+    iApply ("Hinvest" $! a with "Hl Hinv"). 
+  -
+   iAssert (⌜inr b =  inr b⌝%I) as "Hd". done.
+   iApply ("HPost" $! b with "Hd Hinv").
 Qed.
-
 
 Lemma wp_state_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
 Proof.

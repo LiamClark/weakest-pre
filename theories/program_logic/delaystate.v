@@ -41,6 +41,15 @@ refine (λ a, body a ≫= (λ ab,
 )).
 Defined.
 
+CoFixpoint iter_pure {A B} (body: A -> (A + B)): A -> delay B.
+refine (λ a,  
+              match body a with 
+              | inl a => Think (iter_pure _ _ body a)
+              | inr b => Answer b
+              end 
+).
+Defined.
+
 (*
   Iter and loop are mutually derivable so here we implement loop in terms of iter
   the intuition is as follows: I don't actually get it yet let's just run it and see what it does.
@@ -79,7 +88,7 @@ Instance mbind_state_delay ST: MBind (state_delay ST) :=
               end
     ).
 
-Definition distribute_delay_state {A B ST} (m: delay $ option ( ST * (A + B))):
+Definition distribute_delay_state {A B ST} (m: delay $ option (ST * (A + B))):
  delay (option (ST * A) + option (ST * B)).
 refine ((λ x, match x with
               | Some (s, ab) => match ab with (* is there a bifunctor instance?*)
@@ -176,7 +185,7 @@ Section delay.
 
 (*Example programs *)
 Definition fib' (st: nat * nat * nat): delay ((nat * nat * nat) + nat).
-refine(match st with
+refine (match st with
 |(0, x, y) => Answer $ inr $ x
 |((S n), x, y) => Answer $ inl (n, y, x + y)
 end).
@@ -184,13 +193,25 @@ Defined.
 
 Definition fib (n: nat): delay nat := iter fib' (n, 0, 1).
 
-
-
 Lemma test_fib: (λ n, ev_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
 Proof.
   reflexivity.
 Qed.
 
+Definition fib_pure' (st: nat * nat * nat): ((nat * nat * nat) + nat).
+refine (match st with
+|(0, x, y) => inr $ x
+|((S n), x, y) => inl (n, y, x + y)
+end).
+Defined.
+
+Definition fib_pure (n: nat): delay nat := iter_pure fib_pure' (n, 0, 1).
+
+Lemma test_fib_pure: 
+  (λ n, ev_delay 10 (fib_pure n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
+Proof.
+  reflexivity.
+Qed.
 
 Definition state (ST A: Type) : Type := ST -> delay (ST * A).
 
