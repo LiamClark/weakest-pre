@@ -32,13 +32,50 @@ Print TBind.
 Instance mbind_delay : MBind delay := 
   λ _ _ f ma, TBind f ma.
 
-CoFixpoint iter {A B} (body: A -> delay (A + B)) : A -> delay B.
-refine (λ a, body a ≫= (λ ab,
-              match ab with 
-              | inl a => Think (iter _ _ body a)
-              | inr b => Answer b
+(* Coproduct lifting operations
+ g >>> f /  f . g  *)
+Definition delay_pipe {A B C}  (f: A -> delay B) (g: B -> delay C): A -> delay C := 
+  λ x,  f x ≫= g.
+
+Definition case_ {A B C}  (f: A -> C) (g: B -> C)
+  : (A + B -> C).
+refine(λ ab,  match ab with
+              | inl a => f a
+              | inr b => g b
               end 
-)).
+).
+Defined.
+
+
+CoFixpoint iter {A B} (body: A -> delay (A + B)) : A -> delay B.
+refine (delay_pipe body ( case_ (Think ∘ iter _ _ body) Answer)).
+Defined.
+
+Definition delay_frob {A} (e: delay A): delay A.
+refine ( match e with
+          |Answer x => Answer x
+          |Think e' => Think e'
+end).
+Defined.
+
+Lemma delay_frob_eq {A} (e: delay A): delay_frob e = e.
+Proof.
+  by destruct e.
+Qed.
+
+Lemma iter_unfold {A B} (body: A -> delay (A + B)) (x: A):
+   iter body x = body x ≫= case_ (Think ∘ iter body) Answer.
+Proof.
+  rewrite <- (delay_frob_eq (iter body x)).
+  rewrite <- (delay_frob_eq (_ ≫= _)).
+  done.
+Qed.
+
+Definition fBeforeIter {A B} (f: A -> delay (A + B)): A -> delay B.
+refine(λ a, f a ≫= (λ ab,  match ab with
+                            | inl a => Think $ iter f a 
+                            | inr b => Answer b
+                            end)).
 Defined.
 
 CoFixpoint iter_pure {A B} (body: A -> (A + B)): A -> delay B.

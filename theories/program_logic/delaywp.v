@@ -84,6 +84,10 @@ Proof.
    iModIntro. done.
 Qed.
 
+Lemma wp_delay_think {Σ A}(e: delay A) (Φ: A -> iProp Σ): ▷ wp_delay e Φ -∗ wp_delay (Think e) Φ.
+Proof.
+Admitted.
+
 Lemma wp_delay_bind {Σ A B} (f: A -> delay B) (Φ: B -> iProp Σ) (e: delay A): 
   wp_delay e (λ x, wp_delay (f x) Φ) -∗ wp_delay (e ≫= f) Φ.
 Proof.
@@ -220,6 +224,18 @@ Proof.
    iApply ("HPost" $! b with "Hd Hinv").
 Qed.
 
+(* 
+  Second idea, instead of using normal loop wp's we can adapt the idea from the fixpoint wp rule
+  but now using the iter loop law from the interaction trees paper.
+
+  The proof for this fact is here: 
+  https://github.com/DeepSpec/InteractionTrees/blob/83388f7079bfaec417f31c3f77aa13f13b36dd86/theories/Core/KTreeFacts.v#L148
+
+  Since I can't prove things over this f x and have no notion of bisimilarity what do I do now?
+
+*)
+
+
 Lemma wp_state_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
 Proof.
   iIntros "H" (σ) "HSi".
@@ -239,6 +255,22 @@ Proof.
   - iMod "Hwp" as "Hwp". iApply ("H" with "Hwp").
   - iMod "Hwp" as "Hwp". iModIntro.
     iNext. iApply ("IH" $! e with "Hwp H"). 
+Qed.
+
+About wp_delay_bind.
+Lemma wp_delay_iter_law' {Σ A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (f: A -> delay (A + B)):
+  wp_delay (f x) (case_ (λ x, ▷ wp_delay (iter f x) Φ) Φ) -∗
+  wp_delay (iter f x) Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite iter_unfold.
+  iApply wp_delay_bind.
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros ([a | b]) "H !> /=".
+  - by iApply wp_delay_think.
+  - by iApply wp_delay_return.
 Qed.
 
 Lemma wp_strong_mono {Σ A ST SI} (e: state_delay ST A) (Φ Ψ : A -> iProp Σ):
