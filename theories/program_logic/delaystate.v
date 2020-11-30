@@ -71,22 +71,6 @@ Proof.
   done.
 Qed.
 
-Definition fBeforeIter {A B} (f: A -> delay (A + B)): A -> delay B.
-refine(λ a, f a ≫= (λ ab,  match ab with
-                            | inl a => Think $ iter f a 
-                            | inr b => Answer b
-                            end)).
-Defined.
-
-CoFixpoint iter_pure {A B} (body: A -> (A + B)): A -> delay B.
-refine (λ a,  
-              match body a with 
-              | inl a => Think (iter_pure _ _ body a)
-              | inr b => Answer b
-              end 
-).
-Defined.
-
 (*
   Iter and loop are mutually derivable so here we implement loop in terms of iter
   the intuition is as follows: I don't actually get it yet let's just run it and see what it does.
@@ -137,6 +121,7 @@ refine ((λ x, match x with
 ) <$> m).
 Defined.
 
+
 (*These combinators type check but could really use some testing! *)
 Definition iter_state_delay {A B ST} (body: A -> state_delay ST (A + B)) : A -> state_delay ST B.
 refine (λ a, State $ λ s, iter 
@@ -148,6 +133,35 @@ refine (λ a, State $ λ s, iter
                      (Some (s, a)) 
    ).
 Defined.
+
+(* This definition is here to show the type of the body in iter_state_delay without iter fixing it *)
+Definition test {A B ST} (body: A -> state_delay ST (A + B))
+    : A -> ST -> (option (ST * A) -> delay (option (ST * A) + option (ST * B))).
+refine (λ (a: A) (s: ST) optsa,
+            match optsa with
+            | Some (s', a') => distribute_delay_state (runState (body a') s')
+            | None => Answer $ inr $ None 
+            end
+).
+Defined.
+
+(* Write down an equality over state_delay that leaks all the state
+   This can then be used for unrolling the first loop after that the layer of state becomes
+   transparent anwyays and we can use iter delay.
+*)
+Lemma iter_state_delay_unfold_first {A B ST} (body: A -> state_delay ST (A + B)) (x: A):
+ ∀s,
+   runState (iter_state_delay body x) s = distribute_delay_state (runState (body x) s) ≫= 
+   case_ (λ a, Think $ iter (λ optsa, match optsa with
+            | Some (s', a') => distribute_delay_state (runState (body a') s')
+            | None => Answer $ inr $ None 
+            end) a) Answer.
+Proof.
+  intros s. unfold iter_state_delay. simpl.
+  rewrite <- (delay_frob_eq (iter _ (Some (s, x)))).
+  rewrite <- (delay_frob_eq (_ ≫= _)).
+  done.
+Qed.
 
 (*These combinators type check but could really use some testing! *)
 Definition loop_state_delay {A B C ST} (body: (C + A) -> state_delay ST (C + B)): A -> state_delay ST B.

@@ -86,7 +86,10 @@ Qed.
 
 Lemma wp_delay_think {Σ A}(e: delay A) (Φ: A -> iProp Σ): ▷ wp_delay e Φ -∗ wp_delay (Think e) Φ.
 Proof.
-Admitted.
+  iIntros "Hwp".
+  iEval(rewrite wp_delay_unfold). unfold wp_delay_pre.
+  done.
+Qed.
 
 Lemma wp_delay_bind {Σ A B} (f: A -> delay B) (Φ: B -> iProp Σ) (e: delay A): 
   wp_delay e (λ x, wp_delay (f x) Φ) -∗ wp_delay (e ≫= f) Φ.
@@ -104,145 +107,6 @@ Proof.
     iNext. iApply "IH". done.
 Qed.
 
-(* Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
-  (x: A)
-  (inv: A -> iProp Σ)
-  (f: A -> delay (A + B))
-  : inv x -∗
-    (*if we loop again we need to re-establish the wp *)
-   (∀y, ⌜f x = Answer (inl y)⌝ -∗ inv x -∗ wp_delay (iter f y) Φ) -∗ 
-   (∀z, ⌜f x = Answer (inr z)⌝ -∗ inv x -∗ Φ z) -∗
-   wp_delay (iter f x) Φ.
-Proof.
-  iIntros "Hinv Hinvest HPost".
-  rewrite wp_delay_unfold /=. 
-  destruct (f x) as [a | t] eqn: E.
-  - admit.
-  -  iEval (unfold wp_delay_pre).
-iEval (unfold iter).
-    (*  *) 
-   iModIntro. iNext.
-   (* iDestruct ("IH" with "Hinv Hinvest HPost") as "IH'". *)
-
-Qed. *)
-
- CoFixpoint f (n: nat) : delay (nat + nat) :=
-   Think $ f n.
-
-(*So how does this baby work? The idea is to adapt the 
-  wp rules for while loops to iter.
-  from: https://en.wikipedia.org/wiki/Predicate_transformer_semantics#While_loop
-  Normally for a loops a loop invariant is established
-  (here we can have that be supplied hopefully?)
-  The loop invariant should establish the weakestpre for the loop,
-  again for the next iteration if f terminates in an inl
-
-  The loop invariant given the fact that f terminates in an inr
-  should establish the post condition.
-
-  The problem is that I can't properly establish whether f x gives
-  an inl or an inr. The way I have it set up now requires it to
-  be an answer immeadieately, but that's not the only way.
-  For example:
-
-  Definition f (n: nat) : delay (nat + nat) :=
-    Think $ Answer $ inr n.
-  
-  This clearly terminates to a inr but that's not usable with our loop invariant.
-  So I need to account for stacks of thinks that evantually give an inl or an inr
-  in those lemmas.
-  That together with this example:
-
-  CoFixpoint diverge (n: nat) : delay (nat + nat) :=
-    Think $ f n.
-
-  Means that the condition could just diverge. It seems like I need a big step
-  evaluation of the condition and it's simply not available to me?
- *)
-Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
-  (x: A)
-  (inv: A -> iProp Σ)
-  (f: A -> delay (A + B))
-  : inv x -∗
-    (*if we loop again we need to re-establish the wp *)
-   (∀y, ⌜f x = Answer (inl y)⌝ -∗ inv x -∗ wp_delay (iter f y) Φ) -∗ 
-   (∀z, ⌜f x = Answer (inr z)⌝ -∗ inv x -∗ Φ z) -∗
-   wp_delay (iter f x) Φ.
-Proof.
-  iIntros "Hinv Hinvest HPost".
-  iLöb as "IH". (* forall() *)
-  rewrite wp_delay_unfold /=. 
-  iEval (unfold iter). iEval (unfold wp_delay_pre).
-  destruct (f x) as [a | t] eqn: E.
-  - simpl. destruct a.
-    +
-     iAssert (⌜Answer (inl a) = Answer (inl a)⌝%I) as "Hl". done.
-     iApply ("Hinvest" $! a with "Hl Hinv"). 
-    +
-     iAssert (⌜Answer (inr b) = Answer (inr b)⌝%I) as "Hd". done.
-     iApply ("HPost" $! b with "Hd Hinv").
-  -  
-   (*  *) 
-   iModIntro. iNext.
-   (* iDestruct ("IH" with "Hinv Hinvest HPost") as "IH'". *)
-Admitted.
-
-(*    
-  it seems like the normal while loop wp rule can be proven here since
-  for a pure arrow we can actually inspect the loop conditon.
-  
-  What would be more tricky is figuring out how to lift a stateful computation
-  to here. Especially since state_delay wouldn't entirely be the right type,
-  that immeadeately includes state again.
-  So I want: iter_state(body: A -> stateT option (A + B)): A -> state_delay B.
-
-  Lastly it is important to remember that for interaction trees this seperation
-  of non-termination can't be done. Because the itree type contains all the other effects that could occur.
-  hence there iter is and always will be:
-    Definition iter (A -> iTree E (A + B)) : A -> iTree E B.
-*)
-Lemma wp_delay_iter_pure {Σ A B} (Φ: B -> iProp Σ)
-  (x: A)
-  (inv: A -> iProp Σ)
-  (f: A -> A + B)
-  : inv x -∗
-    (*if we loop again we need to re-establish the wp *)
-   (∀y, ⌜f x = inl y⌝ -∗ inv x -∗ wp_delay (iter_pure f y) Φ) -∗ 
-   (∀z, ⌜f x = inr z⌝ -∗ inv x -∗ Φ z) -∗
-   wp_delay (iter_pure f x) Φ.
-Proof.
-  iIntros "Hinv Hinvest HPost".
-  iLöb as "IH". (* forall() *)
-  rewrite wp_delay_unfold /=. 
-  iEval (unfold iter_pure). iEval (unfold wp_delay_pre).
-  destruct (f x) as [a | b] eqn: E.
-  - simpl. 
-    iAssert (⌜inl a = inl a⌝%I) as "Hl". done.
-    iApply ("Hinvest" $! a with "Hl Hinv"). 
-  -
-   iAssert (⌜inr b =  inr b⌝%I) as "Hd". done.
-   iApply ("HPost" $! b with "Hd Hinv").
-Qed.
-
-(* 
-  Second idea, instead of using normal loop wp's we can adapt the idea from the fixpoint wp rule
-  but now using the iter loop law from the interaction trees paper.
-
-  The proof for this fact is here: 
-  https://github.com/DeepSpec/InteractionTrees/blob/83388f7079bfaec417f31c3f77aa13f13b36dd86/theories/Core/KTreeFacts.v#L148
-
-  Since I can't prove things over this f x and have no notion of bisimilarity what do I do now?
-
-*)
-
-
-Lemma wp_state_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
-Proof.
-  iIntros "H" (σ) "HSi".
-  simpl.
-  iApply wp_delay_return. by iFrame.
-Qed.
-
 Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
   wp_delay e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp_delay e Ψ.
 Proof.
@@ -258,7 +122,7 @@ Proof.
 Qed.
 
 About wp_delay_bind.
-Lemma wp_delay_iter_law' {Σ A B} (Φ: B -> iProp Σ)
+Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
   wp_delay (f x) (case_ (λ x, ▷ wp_delay (iter f x) Φ) Φ) -∗
@@ -315,6 +179,13 @@ Proof.
   auto.
 Qed.
 
+Lemma wp_state_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
+Proof.
+  iIntros "H" (σ) "HSi".
+  simpl.
+  iApply wp_delay_return. by iFrame.
+Qed.
+
 Locate "|==>".
 Print bupd.
 Lemma wp_state_bind {Σ A B ST} {SI: ST -> iProp Σ}
@@ -336,7 +207,20 @@ Proof.
 Qed.
 
 Section state_wp.
-  Context  {Σ} {ST} (SI: ST -> iProp Σ).
+  Context {Σ} {ST} (SI: ST -> iProp Σ).
+
+Lemma wp_iter {A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (f: A -> state_delay ST (A + B)):
+  wp SI (f x) (case_ (λ x, ▷ wp SI (iter_state_delay f x) Φ) Φ) -∗
+  wp SI (iter_state_delay f x) Φ.
+Proof.
+  iIntros "Hwp" (σ) "Hsi".
+  iApply wp_delay_iter.
+  iDestruct ("Hwp" $! (σ) with "Hsi") as "Hwp' /=".
+  
+
+Qed.
 
 Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ wp SI (getS) Φ.
 Proof.
