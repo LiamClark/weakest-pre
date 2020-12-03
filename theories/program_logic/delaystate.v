@@ -1,5 +1,6 @@
 From stdpp Require Import list base gmap fin_sets fin_map_dom.
 Require Import Unicode.Utf8.
+Require Import Coq.Logic.FunctionalExtensionality.
 
 (*First we define the delay monad and it's looping combinators *)
 CoInductive delay (A: Type): Type :=
@@ -174,7 +175,8 @@ Lemma iter_state_delay_unfold_first' {A B ST} (f: A -> state_delay ST (A + B)) (
             | None => Answer $ inr $ None 
             end) a) Answer).
 Proof.
-  apply 
+   apply functional_extensionality.
+   apply iter_state_delay_unfold_first.
 Qed.
 
 

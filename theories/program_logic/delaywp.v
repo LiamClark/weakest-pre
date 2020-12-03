@@ -232,6 +232,9 @@ Qed. *)
   wp SI (iter_state_delay f x) Φ.
 Proof.
   iIntros "Hwp".
+  iEval (rewrite <- (runState_eq (iter_state_delay f x))).  
+  rewrite iter_state_delay_unfold_first'.
+  done. 
 Qed.
 
 Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ wp SI (getS) Φ.
