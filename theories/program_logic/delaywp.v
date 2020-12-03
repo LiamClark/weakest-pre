@@ -47,9 +47,9 @@ Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
 Definition wp_delay_pre {Σ} {A} (go: delay A -d> (A -d> iPropO Σ) -d> iPropO Σ):
       delay A -d> (A -d> iPropO Σ) -d> iPropO Σ.
 refine(λ e Φ, |==> match e with
-              | Answer x => Φ x
-              | Think e' => ▷ go e' Φ
-              end
+                   | Answer x => Φ x
+                   | Think e' => ▷ go e' Φ
+                   end
               )%I.
 Defined.
 
@@ -209,7 +209,7 @@ Qed.
 Section state_wp.
   Context {Σ} {ST} (SI: ST -> iProp Σ).
 
-Lemma wp_iter {A B} (Φ: B -> iProp Σ)
+(* Lemma wp_iter {A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> state_delay ST (A + B)):
   wp SI (f x) (case_ (λ x, ▷ wp SI (iter_state_delay f x) Φ) Φ) -∗
@@ -218,8 +218,20 @@ Proof.
   iIntros "Hwp" (σ) "Hsi".
   iApply wp_delay_iter.
   iDestruct ("Hwp" $! (σ) with "Hsi") as "Hwp' /=".
-  
+Qed. *)
 
+ Lemma wp_iter_first {A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (f: A -> state_delay ST (A + B)):
+  wp SI (State $ λ s, distribute_delay_state (runState (f x) s)  ≫= 
+    case_ (λ a, Think $ iter (λ (optsa: option (ST * A)), 
+      match optsa with
+      | Some (s', a') => distribute_delay_state (runState (f a') s')
+      | None => Answer $ inr $ None 
+      end) a) Answer) Φ -∗
+  wp SI (iter_state_delay f x) Φ.
+Proof.
+  iIntros "Hwp".
 Qed.
 
 Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ wp SI (getS) Φ.
@@ -390,19 +402,5 @@ Section state_wp_gp.
     done.
   Qed.
 
-
-  
-  (*
-    iter: (A -> delay_state (A + B))  -> A -> delay_state B
-   *)
-  Lemma wp_state_delay_iter A B Φ 
-    (x: A)
-    (f: A -> state_delay (gmap nat nat) (A + B))
-    : True -∗ wp (state_interp γ) (iter_state_delay f x) Φ.
 End state_wp_gp.
-
-(* 
-  iter combinators. ask robbert for the rules for the looping combinators in Iris.
-  Programs.
-*)
 

@@ -47,8 +47,8 @@ refine(λ ab,  match ab with
 Defined.
 
 
-CoFixpoint iter {A B} (body: A -> delay (A + B)) : A -> delay B.
-refine (delay_pipe body ( case_ (Think ∘ iter _ _ body) Answer)).
+CoFixpoint iter {A B} (f: A -> delay (A + B)) : A -> delay B.
+refine (delay_pipe f ( case_ (Think ∘ iter _ _ f) Answer)).
 Defined.
 
 Definition delay_frob {A} (e: delay A): delay A.
@@ -63,10 +63,10 @@ Proof.
   by destruct e.
 Qed.
 
-Lemma iter_unfold {A B} (body: A -> delay (A + B)) (x: A):
-   iter body x = body x ≫= case_ (Think ∘ iter body) Answer.
+Lemma iter_unfold {A B} (f: A -> delay (A + B)) (x: A):
+   iter f x = f x ≫= case_ (Think ∘ iter f) Answer.
 Proof.
-  rewrite <- (delay_frob_eq (iter body x)).
+  rewrite <- (delay_frob_eq (iter f x)).
   rewrite <- (delay_frob_eq (_ ≫= _)).
   done.
 Qed.
@@ -75,10 +75,10 @@ Qed.
   Iter and loop are mutually derivable so here we implement loop in terms of iter
   the intuition is as follows: I don't actually get it yet let's just run it and see what it does.
 *)
-Definition loop {A B C} (body: C + A -> delay (C + B)): A -> delay B.
+Definition loop {A B C} (f: C + A -> delay (C + B)): A -> delay B.
 refine (λ a, iter 
               (λ ca: C + A, 
-                (body ca) ≫= (λ cb: C + B, 
+                (f ca) ≫= (λ cb: C + B, 
                          match cb with
                          | inl c => Answer $ inl $ inl c
                          | inr b => Answer $ inr b
@@ -100,6 +100,9 @@ Arguments runState {_ _}.
 
 Instance mret_state_delay ST : MRet (state_delay ST) :=
    λ A a, State $ λ s, Answer $ Some (s, a).
+
+Instance fmap_state_delay ST : FMap (state_delay ST) :=
+  (λ A B f ma, State $ λ st, fmap (fmap (prod_map id f)) (runState ma st)).
 
 Instance mbind_state_delay ST: MBind (state_delay ST) :=
  λ A B f ma, State $ λ st, (runState ma st) ≫=
@@ -123,10 +126,10 @@ Defined.
 
 
 (*These combinators type check but could really use some testing! *)
-Definition iter_state_delay {A B ST} (body: A -> state_delay ST (A + B)) : A -> state_delay ST B.
+Definition iter_state_delay {A B ST} (f: A -> state_delay ST (A + B)) : A -> state_delay ST B.
 refine (λ a, State $ λ s, iter 
                      (λ optsa, match optsa with
-                               | Some (s', a') => distribute_delay_state (runState (body a') s')
+                               | Some (s', a') => distribute_delay_state (runState (f a') s')
                                | None => Answer $ inr $ None 
                                end
                      )
@@ -134,12 +137,12 @@ refine (λ a, State $ λ s, iter
    ).
 Defined.
 
-(* This definition is here to show the type of the body in iter_state_delay without iter fixing it *)
-Definition test {A B ST} (body: A -> state_delay ST (A + B))
+(* This definition is here to show the type of the f in iter_state_delay without iter fixing it *)
+Definition test {A B ST} (f: A -> state_delay ST (A + B))
     : A -> ST -> (option (ST * A) -> delay (option (ST * A) + option (ST * B))).
 refine (λ (a: A) (s: ST) optsa,
             match optsa with
-            | Some (s', a') => distribute_delay_state (runState (body a') s')
+            | Some (s', a') => distribute_delay_state (runState (f a') s')
             | None => Answer $ inr $ None 
             end
 ).
@@ -149,11 +152,11 @@ Defined.
    This can then be used for unrolling the first loop after that the layer of state becomes
    transparent anwyays and we can use iter delay.
 *)
-Lemma iter_state_delay_unfold_first {A B ST} (body: A -> state_delay ST (A + B)) (x: A):
- ∀s,
-   runState (iter_state_delay body x) s = distribute_delay_state (runState (body x) s) ≫= 
+Lemma iter_state_delay_unfold_first {A B ST} (f: A -> state_delay ST (A + B)) (x: A):
+  ∀ s, 
+  runState (iter_state_delay f x) s = distribute_delay_state (runState (f x) s) ≫= 
    case_ (λ a, Think $ iter (λ optsa, match optsa with
-            | Some (s', a') => distribute_delay_state (runState (body a') s')
+            | Some (s', a') => distribute_delay_state (runState (f a') s')
             | None => Answer $ inr $ None 
             end) a) Answer.
 Proof.
@@ -163,11 +166,32 @@ Proof.
   done.
 Qed.
 
+(* *)
+Lemma iter_state_delay_unfold_first' {A B ST} (f: A -> state_delay ST (A + B)) (x: A):
+  (λ s, runState (iter_state_delay f x) s) = (λ s, distribute_delay_state (runState (f x) s) ≫= 
+   case_ (λ a, Think $ iter (λ optsa, match optsa with
+            | Some (s', a') => distribute_delay_state (runState (f a') s')
+            | None => Answer $ inr $ None 
+            end) a) Answer).
+Proof.
+  apply 
+Qed.
+
+
+(* Since runstate is exposed in the law above,
+ can I prove something that puts it pack in the state abstraction?*)
+Lemma runState_eq {A ST} (e: state_delay ST A):
+  State $ (λ s, runState e s) = e.
+Proof.
+  destruct e.
+  reflexivity.
+Qed.
+
 (*These combinators type check but could really use some testing! *)
-Definition loop_state_delay {A B C ST} (body: (C + A) -> state_delay ST (C + B)): A -> state_delay ST B.
+Definition loop_state_delay {A B C ST} (f: (C + A) -> state_delay ST (C + B)): A -> state_delay ST B.
 refine (λ a, iter_state_delay
               (λ ca: C + A,
-                (body ca) ≫= (λ cb: C + B,
+                (f ca) ≫= (λ cb: C + B,
                                 match cb with
                                 | inl c => mret $ inl $ inl c
                                 | inr b => mret $ inr b
@@ -227,121 +251,3 @@ Fixpoint ev_delay {A} (n: nat) (ma: delay A): option A :=
 Definition eval_state_delay {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
 refine(λ st, fmap snd $ mjoin $ ev_delay n $ runState ma st).
 Defined.
-
-
-(*
-  Example programs and intermediate steps
- *)
-Section delay.
-
-(*Example programs *)
-Definition fib' (st: nat * nat * nat): delay ((nat * nat * nat) + nat).
-refine (match st with
-|(0, x, y) => Answer $ inr $ x
-|((S n), x, y) => Answer $ inl (n, y, x + y)
-end).
-Defined.
-
-Definition fib (n: nat): delay nat := iter fib' (n, 0, 1).
-
-Lemma test_fib: (λ n, ev_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
-Proof.
-  reflexivity.
-Qed.
-
-Definition fib_pure' (st: nat * nat * nat): ((nat * nat * nat) + nat).
-refine (match st with
-|(0, x, y) => inr $ x
-|((S n), x, y) => inl (n, y, x + y)
-end).
-Defined.
-
-Definition fib_pure (n: nat): delay nat := iter_pure fib_pure' (n, 0, 1).
-
-Lemma test_fib_pure: 
-  (λ n, ev_delay 10 (fib_pure n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
-Proof.
-  reflexivity.
-Qed.
-
-Definition state (ST A: Type) : Type := ST -> delay (ST * A).
-
-Instance mret_state ST : MRet (state ST) := λ A a s, Answer (s, a).
-
-Instance mbind_state ST: MBind (state ST) :=
-  λ _ _ f ma st, 
-          TBind (λ '(s', x), f x s') (ma st). 
-
-Definition put' {ST} (s: ST): state ST () :=
-    λ _, Answer (s, tt).
-
-Definition get' {ST} : state ST ST :=
-  λ s, Answer (s, s).
-
-Definition distribute_delay {ST A B} (msab: delay (ST * (A + B))): delay (ST * A + ST * B) :=
-  (λ '(s, ab), match ab with
-                |inl a => inl (s, a)
-                |inr b => inr (s, b)
-                end
-  ) <$> msab.
-
-Definition iter_state {A B ST} (body: A -> state ST (A + B)) : A -> state ST B :=
-  λ a s, iter
-     (λ '(s', a'), distribute_delay $ body a' s' )
-     (s, a).
-
-
-Fixpoint eval_state {ST A} (n: nat) (ma: state ST A) {struct n} : ST -> option A.
-refine(λ s,
-        match n with
-        | S n' =>
-          match ma s with
-            | Answer (s', a) => Some a
-            | Think m' => eval_state _ _ n' (λ _, m')  s
-             (*This bothers me, it seems to indicate that state would be lost between recursive steps?*)
-          end 
-        | O => None
-        end
-      ).
-Defined.
-
-Definition iter_body (n: nat): state nat (nat + nat).
-refine(get' ≫= λ s, match s with
-                     | O => mret $ inr n
-                     | S s' => put' s' ;; mret $ inl $ n + s
-                     end
-).
-Defined.
-
-Lemma test_state: eval_state 10 (iter_state (iter_body) 0) 5 = Some 15.
-Proof.
-  reflexivity.
-Qed.
-
-(* however this seems to work? WTF?*)
-Lemma test_state': eval_state 10 (iter_state iter_body 0 ;; get') 5 = Some 0.
-Proof.
-  reflexivity.
-Qed. 
-
-
-Check fst.
-(* This should illustrate the state passing better. We first run the state effect
-   Then the think notes implicitly somehow capture the state passing in the iteration constructs 
-*)
-
-
-Definition iter_adder (l k: nat): () -> state_delay (gmap nat nat) (() + nat) :=
-  λ _, x  ← get l ;
-       y  ← get k ; 
-       if x =? 0 then mret $ inr y 
-       else put l (x - 1) ;; put k (y + 1) ;; mret $ inl () .
-
-
-Definition init_state: gmap nat nat := (<[1 := 1]> (<[0 := 5]> ∅)).
-Lemma test_gmap_adder: eval_state_delay 10 (iter_state_delay (iter_adder 0 1) tt) init_state = Some 6.
-Proof.
-  reflexivity.
-Qed.
-
-End delay.
