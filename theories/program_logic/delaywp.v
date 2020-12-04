@@ -91,6 +91,7 @@ Proof.
   done.
 Qed.
 
+
 Lemma wp_delay_bind {Σ A B} (f: A -> delay B) (Φ: B -> iProp Σ) (e: delay A): 
   wp_delay e (λ x, wp_delay (f x) Φ) -∗ wp_delay (e ≫= f) Φ.
 Proof.
@@ -107,6 +108,8 @@ Proof.
     iNext. iApply "IH". done.
 Qed.
 
+
+
 Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
   wp_delay e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp_delay e Ψ.
 Proof.
@@ -119,6 +122,16 @@ Proof.
   - iMod "Hwp" as "Hwp". iApply ("H" with "Hwp").
   - iMod "Hwp" as "Hwp". iModIntro.
     iNext. iApply ("IH" $! e with "Hwp H"). 
+Qed.
+
+Lemma wp_delay_fmap {Σ A B} (f: A -> B) (Φ: B -> iProp Σ) (e: delay A): 
+  wp_delay e (Φ ∘ f ) -∗ wp_delay (f <$> e) Φ. 
+Proof.
+  iIntros "Hwp".
+  iApply wp_delay_bind.
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros (x) "Hpost !> /=".
+  by iApply wp_delay_return.
 Qed.
 
 About wp_delay_bind.
@@ -179,7 +192,7 @@ Proof.
   auto.
 Qed.
 
-Lemma wp_state_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
+Lemma wp_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
 Proof.
   iIntros "H" (σ) "HSi".
   simpl.
@@ -188,7 +201,7 @@ Qed.
 
 Locate "|==>".
 Print bupd.
-Lemma wp_state_bind {Σ A B ST} {SI: ST -> iProp Σ}
+Lemma wp_bind {Σ A B ST} {SI: ST -> iProp Σ}
   (f: A -> state_delay ST B)
   (Φ: B -> iProp Σ)
   (e: state_delay ST A)
@@ -209,7 +222,7 @@ Qed.
 Section state_wp.
   Context {Σ} {ST} (SI: ST -> iProp Σ).
 
-(* Lemma wp_iter {A B} (Φ: B -> iProp Σ)
+ Lemma wp_iter {A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> state_delay ST (A + B)):
   wp SI (f x) (case_ (λ x, ▷ wp SI (iter_state_delay f x) Φ) Φ) -∗
@@ -217,25 +230,21 @@ Section state_wp.
 Proof.
   iIntros "Hwp" (σ) "Hsi".
   iApply wp_delay_iter.
-  iDestruct ("Hwp" $! (σ) with "Hsi") as "Hwp' /=".
-Qed. *)
-
- Lemma wp_iter_first {A B} (Φ: B -> iProp Σ)
-  (x: A)
-  (f: A -> state_delay ST (A + B)):
-  wp SI (State $ λ s, distribute_delay_state (runState (f x) s)  ≫= 
-    case_ (λ a, Think $ iter (λ (optsa: option (ST * A)), 
-      match optsa with
-      | Some (s', a') => distribute_delay_state (runState (f a') s')
-      | None => Answer $ inr $ None 
-      end) a) Answer) Φ -∗
-  wp SI (iter_state_delay f x) Φ.
-Proof.
-  iIntros "Hwp".
-  iEval (rewrite <- (runState_eq (iter_state_delay f x))).  
-  rewrite iter_state_delay_unfold_first'.
-  done. 
-Qed.
+  iMod ("Hwp" $! (σ) with "Hsi") as "Hwp /=".
+  iModIntro.
+  unfold distribute_delay_state.
+  iApply wp_delay_fmap.
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros ([[s [a| b]]| ]) "Hpost /="; [ |auto..].
+  iDestruct "Hpost" as "(Hsi & Hwp')".
+  iIntros "!> !>".
+  unfold iter_state_delay.
+  unfold distribute_delay_state.
+  iApply bupd_wp_delay.
+  iMod ("Hwp'" with "Hsi") as "Hwp' /= ".
+  iModIntro.
+  done.
+Qed. 
 
 Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ wp SI (getS) Φ.
 Proof.
@@ -370,11 +379,11 @@ Section state_wp_gp.
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (get n) Ψ.
   Proof.
     iIntros "Hpt Hpost".
-    iApply wp_state_bind. iApply wp_getS.
+    iApply wp_bind. iApply wp_getS.
     iIntros (σ) "Hsi".
     iDestruct (si_points_to_agree with "Hsi Hpt") as %->.
     iIntros "{$Hsi} !>".
-    iApply wp_state_return. by iApply "Hpost".
+    iApply wp_return. by iApply "Hpost".
   Qed.
 
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :

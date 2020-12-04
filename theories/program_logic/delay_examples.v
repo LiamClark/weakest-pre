@@ -80,9 +80,8 @@ Qed.
     not always hold that needs to be generalized too.
 *)
 Lemma verify_delay_fib' n1 n2 n:
-    True -∗ wp_delay (delaystate.iter fib' (n, n1, n2)) (post' n1 n2 n).
+    ⊢ wp_delay (delaystate.iter fib' (n, n1, n2)) (post' n1 n2 n).
 Proof.
-    iIntros "_".
     (*How do i vary the IH here properly *)
     iLöb as "IH" forall (n n1 n2).
     unfold fib.
@@ -90,7 +89,13 @@ Proof.
     destruct n eqn: E.
     - iApply wp_delay_return. done.
     - iApply wp_delay_return. simpl. 
-      iNext. iDestruct ("IH" $! n0 n2) as "IH'".
+      iNext.
+      iApply (wp_strong_mono_delay with "IH").
+      unfold post'.
+      iIntros (v Hv) "!%".
+      simpl.
+
+      iDestruct ("IH" $! n0 n2) as "IH'".
 Qed.
 
 Lemma verify_delay_fib n:

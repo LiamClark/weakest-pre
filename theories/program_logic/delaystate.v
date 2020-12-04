@@ -11,12 +11,6 @@ Arguments Answer {_}.
 Arguments Think {_}.
 
 
-Instance fmap_delay : FMap delay := 
-  λ A B f,
-       cofix r fa := match fa with
-                     | Answer x  => Answer $ f x
-                     | Think fa' => Think $ r fa'
-       end.
 
 (* Using the cofix to extract all parameters that are constant throughout the recursion
    Is crucial in having the guardness check work for loop and iter.
@@ -32,6 +26,11 @@ Print TBind.
 
 Instance mbind_delay : MBind delay := 
   λ _ _ f ma, TBind f ma.
+
+Instance fmap_delay : FMap delay := 
+  λ A B f ma,
+        ma ≫= Answer ∘ f.
+
 
 (* Coproduct lifting operations
  g >>> f /  f . g  *)
@@ -189,7 +188,6 @@ Proof.
   reflexivity.
 Qed.
 
-(*These combinators type check but could really use some testing! *)
 Definition loop_state_delay {A B C ST} (f: (C + A) -> state_delay ST (C + B)): A -> state_delay ST B.
 refine (λ a, iter_state_delay
               (λ ca: C + A,
