@@ -10,8 +10,6 @@ CoInductive delay (A: Type): Type :=
 Arguments Answer {_}.
 Arguments Think {_}.
 
-
-
 (* Using the cofix to extract all parameters that are constant throughout the recursion
    Is crucial in having the guardness check work for loop and iter.
 *)
@@ -238,16 +236,16 @@ Definition alloc {A} (v: A) : state_delay (gmap nat A) nat :=
 Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
   modifyS $ delete n.
 
-Fixpoint ev_delay {A} (n: nat) (ma: delay A): option A :=
+Fixpoint eval_delay {A} (n: nat) (ma: delay A): option A :=
   match n with
   | O => None
   | S n' => match ma with
             | Answer x => Some x
-            | Think ma' => ev_delay n' ma'
+            | Think ma' => eval_delay n' ma'
             end
   end.
 
 
 Definition eval_state_delay {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
-refine(λ st, fmap snd $ mjoin $ ev_delay n $ runState ma st).
+refine(λ st, fmap snd $ mjoin $ eval_delay n $ runState ma st).
 Defined.

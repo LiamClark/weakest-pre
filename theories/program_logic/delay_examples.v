@@ -14,7 +14,7 @@ Defined.
 
 Definition fib (n: nat): delay nat := delaystate.iter fib' (n, 0, 1).
 
-Lemma test_fib: (λ n, ev_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
+Lemma test_fib: (λ n, eval_delay 10 (fib n)) <$> [0; 1; 2; 3; 4; 5; 6; 7] = Some <$> [0; 1; 1; 2; 3; 5; 8; 13].
 Proof.
   reflexivity.
 Qed.

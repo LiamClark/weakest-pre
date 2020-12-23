@@ -5,34 +5,6 @@ From iris.base_logic.lib Require Export fancy_updates.
 From shiris.program_logic Require Import delaystate.
 Set Default Proof Using "Type".
 
-(* 
-    What should the definition for wp look like?
-    I want to match on the delay type and for answer apply the post condition.
-    For the think branch I want to apply the wp recursively.
-
-    Before I can get to the delay type I first need to run the state somehow.
-    This is a wishful thinking version of the wp definition.
-*)
-Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
-           (e: state_delay ST A) (Φ: A -> iProp Σ): iProp Σ := ∀ σ,
-  SI σ ==∗
-  match runState e σ with
-       | Answer (Some (σ', x)) => Φ x ∗ SI σ'
-       | Answer None => True
-       | Think e' => True (*▷ state_wp SI e'Φ*)
-  end.
-
-(* The actual definition will need Iris fixpoint for this. Let's try finding that somewhere        
-   Wp is here https://gitlab.mpi-sws.org/iris/iris/-/blob/master/theories/program_logic/weakestpre.v#L27
-   The fixpoint is here: https://gitlab.mpi-sws.org/iris/iris/-/blob/master/theories/program_logic/weakestpre.v#L47
-*)
-
-(* Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ) *)
-           (* (e: state_delay ST A) (Φ: A -> iProp Σ): iProp Σ := ∀ σ, *)
-  (* SI σ ==∗ *)
-  (* ∃σ', ⌜runState e σ = Some (a, σ') ⌝ ∗ *)
-          (* SI σ' ∗ *)
-          (* Φ a. *)
 (*
   We run into the same problem here as with the evaluator for state_delay: 
   We need the state aspect for our state interpretation and our notion of separation.
@@ -91,7 +63,6 @@ Proof.
   done.
 Qed.
 
-
 Lemma wp_delay_bind {Σ A B} (f: A -> delay B) (Φ: B -> iProp Σ) (e: delay A): 
   wp_delay e (λ x, wp_delay (f x) Φ) -∗ wp_delay (e ≫= f) Φ.
 Proof.
@@ -107,7 +78,6 @@ Proof.
     iModIntro.
     iNext. iApply "IH". done.
 Qed.
-
 
 
 Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
@@ -134,7 +104,6 @@ Proof.
   by iApply wp_delay_return.
 Qed.
 
-About wp_delay_bind.
 Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
@@ -150,18 +119,6 @@ Proof.
   - by iApply wp_delay_return.
 Qed.
 
-Lemma wp_strong_mono {Σ A ST SI} (e: state_delay ST A) (Φ Ψ : A -> iProp Σ):
-  wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ .
-Proof.
-  unfold wp.
-  iIntros "Hwp H" (σ) "HSi".
-  iDestruct ("Hwp" with "HSi") as "Hwp".
-  iApply (wp_strong_mono_delay with "Hwp").
-  iIntros ([[s x] | ]). 
-  - iIntros "($ & HPost)".
-    by iApply "H".
-  - done.
-Qed.
 
 Lemma bupd_wp_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : (|==> wp_delay e Φ) ⊢ wp_delay e Φ.
 Proof.
@@ -178,6 +135,131 @@ Proof.
   auto.
 Qed.
 
+Check uPred.later_soundness.
+Locate uPred.later_soundness.
+Check step_fupdN_soundness.
+
+Lemma later_bupdN_soudness' {M} (n: nat) (φ: Prop):
+  (⊢@{uPredI M} Nat.iter n (λ P, |==> ▷ P) ⌜φ⌝) -> φ.
+Proof.
+Admitted.
+
+From iris.bi Require Import derived_laws_later plainly.
+Import derived_laws_later.bi.
+
+Lemma step_bupd_bupd {M} φ:
+  ((|==> ▷ φ) ⊢@{uPredI M} |==> ▷ |==> φ).
+Proof.
+  iIntros "H".
+  iMod "H" as "H'". 
+  iModIntro.
+  by rewrite -bupd_intro.
+Qed.
+
+Lemma bupd_plain_later {M} (φ: Prop):
+  (⊢@{uPredI M} (▷ |==> ⌜φ⌝) ==∗ ▷ ◇ ⌜φ⌝).
+Proof.
+  iIntros "H".
+  iModIntro. iNext.
+  iApply bupd_plain. 
+  by iMod "H" as "H'".
+Qed.
+
+Lemma step_bupd_plain {M} φ `{!Plain φ}:
+  (⊢@{uPredI M} (|==> ▷ φ) ==∗ ▷ ◇ φ).
+Proof.
+  iIntros "H".
+  iMod "H" as "H'".
+  iModIntro. iNext.
+  done.
+Qed.
+
+Lemma bupd_step_bupd {M} n φ:
+  (⊢@{uPredI M} (|==> ▷ (|==> ▷^n ◇ ⌜φ⌝)) -∗ (|==> ▷ ▷^n ◇ ⌜φ⌝)) .
+Proof.
+  iIntros "H".
+  iMod "H" as "H". iModIntro. iNext.
+  by iApply bupd_plain.
+Qed.
+
+Check bupd_trans.
+Lemma step_bupdN_plain {M} n (φ: Prop): 
+  (⊢@{uPredI M}(Nat.iter n (λ P, |==> ▷ P) ⌜φ⌝) ==∗ ▷^n ◇ ⌜φ⌝).
+Proof.
+  induction n as [|n IH]; iIntros "H".
+  - by rewrite -bupd_intro -except_0_intro.
+  - rewrite Nat_iter_S. rewrite step_bupd_bupd.
+    iDestruct (IH with "H") as "H'".
+    rewrite !bupd_trans. 
+    by iDestruct (bupd_step_bupd with "H'") as "H''".
+Qed.
+
+(* The version in fancy updates has an extra bupd around φ does that matter? *)
+(*found in iris/baselogic/lib/fancyupdate *)
+Lemma later_bupdN_soundness {M} (n: nat) (φ: Prop):
+  (⊢@{uPredI M} Nat.iter n (λ P, |==> ▷ P) (⌜φ⌝)) -> φ.
+Proof.
+  intro H.
+  apply (@uPred.soundness M _ (S n)).
+  iPoseProof (H) as "H'".
+  induction n. 
+  - 
+    done.
+   (* simpl in *. *)
+   (* iApply bupd_plain. *)
+   (* by iMod "H'" as %H'. *)
+  - 
+    iDestruct (step_bupdN_plain with "H'") as "H''".
+    iApply bupd_plain.
+    iMod "H''" as "H''". iModIntro. iNext.
+    rewrite -later_laterN laterN_later.
+    iNext. by iMod "H''". 
+Qed.
+
+
+(* How can I express adequacy for delay is running with fuel the only way here?
+   Or is there a coinductive variant possibl here that delas with infinity better?
+*)
+Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
+    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
+    eval_delay n prog = Some x -> φ x.
+Proof.
+  revert prog.
+  intros prog Hpre Heval.
+  apply (@later_bupdN_soundness (iResUR Σ) n).
+  revert Heval Hpre.
+  revert prog.
+  induction n as [|n' IHn]; intros prog Heval Hpre; simplify_eq/=.
+  rewrite -> wp_delay_unfold in Hpre.
+  unfold wp_delay_pre in Hpre.
+  destruct prog.
+  simplify_eq/=.
+  - 
+    (* how do I strip the n modalities here*)
+    iMod Hpre as "H".
+    iModIntro. iNext.
+    done.
+  - eapply IHn, Heval.
+   
+
+  simpl in Hpre.
+
+Qed.
+
+
+Lemma wp_strong_mono {Σ A ST SI} (e: state_delay ST A) (Φ Ψ : A -> iProp Σ):
+  wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ .
+Proof.
+  unfold wp.
+  iIntros "Hwp H" (σ) "HSi".
+  iDestruct ("Hwp" with "HSi") as "Hwp".
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros ([[s x] | ]). 
+  - iIntros "($ & HPost)".
+    by iApply "H".
+  - done.
+Qed.
+
 Lemma bupd_wp {Σ A ST SI} (e: state_delay ST A) (Φ : A -> iProp Σ): (|==> wp SI e Φ) ⊢ wp SI e Φ.
 Proof.
   iIntros "Hwp".
@@ -191,6 +273,7 @@ Proof.
   iApply (wp_strong_mono with "Hwp").
   auto.
 Qed.
+
 
 Lemma wp_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
 Proof.
