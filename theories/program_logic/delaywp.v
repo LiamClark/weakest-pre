@@ -216,6 +216,30 @@ Proof.
     iNext. by iMod "H''". 
 Qed.
 
+Lemma adequacy_delay_own_try {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
+    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
+    eval_delay n prog = Some x -> φ x.
+Proof.
+  revert prog.
+  intros prog Hpre Heval.
+  (* apply (@later_bupdN_soundness (iResUR Σ) n). *)
+  revert Heval Hpre.
+  revert prog.
+  induction n as [|n' IHn]; intros prog Heval Hpre; simplify_eq/=.
+  rewrite -> wp_delay_unfold in Hpre.
+  unfold wp_delay_pre in Hpre.
+  destruct prog.
+  simplify_eq/=.
+  -
+    apply (uPred.pure_soundness (M := iResUR Σ)).
+    iMod Hpre as "H". done.
+  - 
+    apply (@later_bupdN_soundness (iResUR Σ) (S n')). simpl.
+    iMod Hpre as "H". iModIntro.
+    iNext. 
+    eapply IHn.
+Admitted. 
+
 
 (* How can I express adequacy for delay is running with fuel the only way here?
    Or is there a coinductive variant possibl here that delas with infinity better?
@@ -238,8 +262,22 @@ Proof.
     (* how do I strip the n modalities here*)
     iMod Hpre as "H".
     iModIntro. iNext.
-    done.
-  - eapply IHn, Heval.
+    admit. 
+  -
+   iMod Hpre as "H". iModIntro.
+   iNext. 
+   iApply (IHn).
+   iDestruct (IHn with "[] [H]") as "IHn'".
+    + done.
+    +
+
+   iApply (IHn $! Heval with "H"). "[H]".
+   + done.
+   +
+   -
+
+   iApply (IHn with "H").
+   iApply (IHn $! Heval).
    
 
   simpl in Hpre.
