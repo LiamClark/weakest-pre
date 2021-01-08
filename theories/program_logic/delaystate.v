@@ -245,6 +245,9 @@ Fixpoint eval_delay {A} (n: nat) (ma: delay A): option A :=
             end
   end.
 
+Definition eval_state_delay' {ST A} (n: nat) (ma: state_delay ST A): ST -> option (ST * A).
+refine(λ st, mjoin $ eval_delay n $ runState ma st).
+Defined.
 
 Definition eval_state_delay {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
 refine(λ st, fmap snd $ mjoin $ eval_delay n $ runState ma st).

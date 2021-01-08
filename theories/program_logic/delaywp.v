@@ -221,75 +221,6 @@ Proof.
   - iModIntro. iNext. done.
 Qed.
 
-(* (⊢ ▷ P) -> (⊢ P) *)
-(* (∀n, P (n - 1)) -> (∀n, P n) *)
-(* 
- H: (∀n, P (n - 1)) 
- n
- P n 
-*)
-(* (▷ P ⊢ P) *)
-
-(* 
-  (⊢ |==> P) -> (⊢ P )
-  (∀res, ∀f, ∃res', res = f + res' -> P (res' * f)) -> (∀ res,  P res)
-  
-  (|==> P ⊢ P)
-
-*)
-
-Lemma adequacy_delay_own_try {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
-    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
-    eval_delay n prog = Some x -> φ x.
-Proof.
-  revert prog.
-  intros prog Hpre Heval.
-  (* apply (@later_bupdN_soundness (iResUR Σ) n). *)
-  revert Heval Hpre.
-  revert prog.
-  induction n as [|n' IHn]; intros prog Heval Hpre; simplify_eq/=.
-  rewrite -> wp_delay_unfold in Hpre.
-  unfold wp_delay_pre in Hpre.
-  destruct prog.
-  simplify_eq/=.
-  -
-    apply (uPred.pure_soundness (M := iResUR Σ)).
-    iMod Hpre as "H". done.
-  - 
-    apply (@later_bupdN_soundness (iResUR Σ) (S n')). simpl.
-    iMod Hpre as "H". iModIntro.
-    iNext. 
-Admitted.
-
-(* |==> ▷ wp_delay prog (λ x: A, ⌜ φ x ⌝) ⊢ |==> ▷ Nat.iter n' (λ P, |==> ▷ P) ⌜ φ x⌝) ->
-wp_delay prog (λ x: A, ⌜ φ x ⌝) ⊢ Nat.iter n' (λ P, |==> ▷ P) ⌜ φ x⌝) *)
-
-(* 
-r1: (⊢ P) -> (⊢ Q)
-   (∀n, P n) -> (∀n, Q n)
-
-   (∀n, P n -> Q n)
-r2:   P ⊢ Q
-
-r1 -> r2
-  H:((∀n, P n) -> (∀n, Q n))
-  n
-  H2: P n
-  Q n
-
-r2 -> r1
-  H:   P n -> Q n)
-  H2:  P n)
-  n
-  Q n
-
-(P ⊢ Q) -> ((True ⊢ P) -> (True ⊢ Q))
-H: (P ⊢ Q) 
-H2: (True ⊢ P)
-(True ⊢ Q)
-entail_trans H2 H
-True ⊢ Q
-*)
 Print Transitive.
 Lemma lift_entails {Σ} (P Q: iProp Σ): (P ⊢ Q) -> ((⊢ P) -> (⊢ Q)).
 Proof.
@@ -319,22 +250,6 @@ Proof.
        by iApply nlaters.
     + iMod "Hpre". iModIntro. iNext.
       by iApply "IH".
-
-
-
-  rewrite -> wp_delay_unfold in Hpre.
-  unfold wp_delay_pre in Hpre.
-  destruct prog.
-  simplify_eq/=.
-  - 
-    (* how do I strip the n modalities here*)
-    iMod Hpre as "H".
-    iModIntro. iNext.
-    admit. 
-
-
-  simpl in Hpre.
-
 Qed.
 
 
@@ -587,6 +502,59 @@ Section state_wp_gp.
     iMod (si_free with "Hsi Hpt") as "$".
     done.
   Qed.
-
 End state_wp_gp.
 
+
+Section state_delay_adequacy.
+  Context `{! inG Σ (heapR natO)}.
+
+(* This allows the use of evaluation info from the outer stack,
+  for the inner stack *)
+Lemma eval_state_eval_delay {A} (n: nat) (x: A)
+ (prog: state_delay (gmap nat nat) A)
+ (st st': gmap nat nat):  
+ eval_state_delay' n prog st = Some (st', x) ->
+ eval_delay n (runState prog st) = Some $ Some (st', x).
+Proof.
+  intros Hev_state_delay.
+  unfold eval_state_delay' in *.
+  unfold mjoin in *. unfold option_join in *.
+  destruct (eval_delay n (runState prog st)).
+  - by simplify_eq /=.
+  - done.
+Qed.
+
+Definition adapt_post {A} (φ: A -> Prop): option (gmap nat nat * A) -> Prop.
+refine(λ res, match res with
+              | Some (_, x) => φ x
+              | None => True
+              end).
+Defined.
+
+(* Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
+    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
+    eval_delay n prog = Some x -> φ x.
+Proof. *)
+(*Can I prove this for a abstract state?*)
+Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A) 
+  (prog : state_delay (gmap nat nat) A)
+  (st: gmap nat nat)
+  : (∀γ, ⊢ wp (state_interp γ) prog (λ x, ⌜φ x⌝)) ->
+  ∃ st', eval_state_delay' n prog st = Some (st', x) ->
+  φ x.
+Proof.
+  intros Hpre.
+  apply (uPred.pure_soundness (M := iResUR Σ)).
+  iMod (own_alloc (● (lift_excl st))) as (γ) "Hγ".
+  - apply auth_auth_valid. intro i. 
+    rewrite lookup_fmap. destruct (st !! i); done.
+  - iMod (Hpre γ $! st with "Hγ") as "HDelaypre".
+    (*the state we can pick as our endstate can be introduced
+     from the match clause. The next step is to trim the wp_delay here.
+     My first idea would be to try using its adequacy Lemma *)
+     pose (runState prog st). 
+     (*There is a mismatch in the types here *)
+     pose (@adequacy_delay _ Σ (adapt_post φ) n (Some (st, x)) (runState prog st)). 
+
+  intros st''.
+Qed.
