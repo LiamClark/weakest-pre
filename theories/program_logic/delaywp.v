@@ -297,6 +297,33 @@ Proof.
   iApply wp_delay_return. by iFrame.
 Qed.
 
+
+(*
+Lemma wp_delay_fmap {Σ A B} (f: A -> B) (Φ: B -> iProp Σ) (e: delay A): 
+  wp_delay e (Φ ∘ f ) -∗ wp_delay (f <$> e) Φ. 
+Proof.
+  iIntros "Hwp".
+  iApply wp_delay_bind.
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros (x) "Hpost !> /=".
+  by iApply wp_delay_return.
+Qed.
+*)
+Lemma wp_fmap  {Σ A B ST} {SI: ST -> iProp Σ}
+ (f: A -> B)
+ (Φ: B -> iProp Σ)
+ (e: state_delay ST A):
+  wp SI e (Φ ∘ f ) -∗ wp SI (f <$> e) Φ. 
+Proof.
+  iIntros "Hwp" (σ) "Hsi".
+  rewrite /fmap /fmap_state_delay /=.
+  iApply wp_delay_fmap.
+  iMod ("Hwp" with "Hsi") as "H".
+  iModIntro.
+  iApply (wp_strong_mono_delay with "H").
+  by iIntros ([[st x]| ]) "H !> /=".
+Qed.
+
 Locate "|==>".
 Print bupd.
 Lemma wp_bind {Σ A B ST} {SI: ST -> iProp Σ}
@@ -542,20 +569,15 @@ Section state_delay_adequacy.
                 | None => True
                 end.
 
-  Lemma adapt_pre {A} {γ} (φ: A -> Prop) (prog : state_delay (gmap nat nat) A)
-    (st: gmap nat nat):
-    wp_delay (runState prog st)
-                  (λ res : option (gmap nat nat * A),
+  Lemma adapt_pre {A} {γ} (φ: A -> Prop) (res: option (gmap nat nat * A)):
                      match res with
                      | Some (σ', x') => (state_interp γ σ' ∗ ⌜φ x'⌝)%I
                      | None => True%I
-                     end) -∗
-    wp_delay (runState prog st) (λ x, ⌜(adapt_post φ) x ⌝ ).
+                     end -∗ ⌜(adapt_post φ) res ⌝.
   Proof.
-    iIntros "H".
-    iApply (wp_strong_mono_delay with "H").
-    iIntros (v) "Hpre". unfold adapt_post.
-    destruct v as [[σ' x]| ].
+    iIntros "Hpre".
+    unfold adapt_post.
+    destruct res as [[σ' x]| ].
     - by iDestruct "Hpre" as "(Hsi & Hpure)".
     - done.
   Qed.
@@ -564,52 +586,17 @@ Section state_delay_adequacy.
     adequacy statement for the delay monad. 
     It is required in order to allocate the initial heap and get a gname.
   *) 
-  Lemma adequacy_delay_update {A} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
-      (⊢ |==> @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
-      eval_delay n prog = Some x -> φ x.
-  Proof.
-    intros Hpre Heval.
-    apply (@later_bupdN_soundness (iResUR Σ) n).
-    revert Hpre.
-    apply lift_entails.
-    iIntros "Hpre".
-    iInduction n as [|n'] "IH" forall (prog Heval).
-    - done.
-    - simpl in *.
-      rewrite wp_delay_unfold.
-      unfold wp_delay_pre.
-      destruct prog as [a| prog']. simplify_eq/=.
-      + iMod "Hpre".
-        iMod "Hpre" as %Hpre.
-        iModIntro. iNext.
-        by iApply nlaters.
-      + iMod "Hpre".
-        iMod "Hpre".
-        iModIntro. iNext.
-        by iApply "IH".
-  Qed.
-
-  (*This is here to specialize adequacy_delay_update'
-    To make the types allign with how wp uses the type variables of
-    wp_delay.
-  *)
   Lemma adequacy_state_inbetween {A} (φ: A -> Prop) (n: nat) 
     (x: A) 
     (prog : state_delay (gmap nat nat) A)
     (st st': gmap nat nat):
-    (⊢ |==> @wp_delay Σ _(runState prog st) (λ y, ⌜adapt_post φ y⌝)) ->
+    (⊢ @wp_delay Σ _(runState prog st) (λ y, ⌜adapt_post φ y⌝)) ->
     (eval_delay n (runState prog st) = Some (Some (st', x)))
     -> (adapt_post φ (Some (st', x))).
   Proof.
-    apply adequacy_delay_update.
-  Qed.
-  
-  
-  (* Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
-      (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
-      eval_delay n prog = Some x -> φ x.
-  Proof. *)
-  (*Can I prove this for a abstract state?*)
+    apply adequacy_delay.
+  Qed. 
+ 
   Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A) 
     (prog : state_delay (gmap nat nat) A)
     (st st': gmap nat nat)
@@ -620,13 +607,16 @@ Section state_delay_adequacy.
     intros Hpre Heval.
     eapply adequacy_state_inbetween.
     unfold wp in Hpre.
-    - 
+    -
+      iApply bupd_wp_delay. 
       iMod (own_alloc (● (lift_excl st))) as (γ) "Hsi".
       + apply auth_auth_valid. intro i. 
         rewrite lookup_fmap. destruct (st !! i); done.
       + 
          iMod (Hpre γ $! st with "Hsi") as "HDelaypre".
          iModIntro.
+         iApply (wp_strong_mono_delay with "[$]").
+         iIntros (v) "H".
          by iApply adapt_pre. 
     - by apply eval_state_eval_delay.
   Qed. 

@@ -1,4 +1,3 @@
-
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
 From shiris.program_logic Require Import delaystate.
@@ -44,9 +43,11 @@ Qed.
 Section state_ad.
 Context `{! inG Σ (heapR natO)}.
 
-Lemma post' (n1 n2 n: nat) (ret: nat): iProp Σ.
+Definition post' (n1 n2 n: nat) (ret: nat): iProp Σ.
 refine( ⌜ret = coq_fib n1 n2 n⌝%I).
 Defined.
+
+Definition post (n ret: nat): iProp Σ := post' 0 1 n ret.
 
 Lemma coq_fib_unfold n1 n2 n: 
     coq_fib n1 n2 (S (S n)) = coq_fib n1 n2 (S n) + coq_fib n1 n2 n.
@@ -99,43 +100,64 @@ Lemma coq_fib_move' n1 n2 n:
 Lemma verify_delay_fib' n1 n2 n:
     ⊢ wp_delay (delaystate.iter fib' (n, n1, n2)) (post' n1 n2 n).
 Proof.
-    (*How do i vary the IH here properly *)
     iLöb as "IH" forall (n n1 n2).
     iApply wp_delay_iter. 
-    destruct n as [| n'] eqn: E .
+    destruct n as [| n'] eqn: E.
     - iApply wp_delay_return. done.
     - iApply wp_delay_return. simpl. 
       iNext.
       iApply (wp_strong_mono_delay with "IH").
-      unfold post'.
-      iIntros (v Hv) "!%".
-      subst v.
+      iIntros (v Hv) "!%". subst v.
       apply coq_fib_move'.
 Qed.
 
 Lemma verify_delay_fib n:
-    True -∗ wp_delay (fib n) (post n).
+    ⊢ wp_delay (fib n) (post n).
 Proof.
-
-Definition iter_adder (l k: nat): () -> state_delay (gmap nat nat) (() + nat) :=
-  λ _, x  ← get l ;
-       y  ← get k ; 
-       if x =? 0 then mret $ inr y 
-       else put l (x - 1) ;; put k (y + 1) ;; mret $ inl () .
+    unfold fib. unfold post.
+    apply (@verify_delay_fib' 0 1 n).
+Qed.
 
 Definition fib_state' (l1 l2: nat) (n: nat): state_delay (gmap nat nat) (nat + nat) :=
     match n with
     | S n' => n1 ← get l1 ;
               n2 ← get l2 ;
-              put l1 n1 ;; put l2 (n1 + n2) ;; mret $ inl n'
-    | O => inr <$> get l2
+              put l1 n2 ;; put l2 (n1 + n2) ;; mret $ inl n'
+    | O => inr <$> get l1
     end.
 
-Definition fib_state (l1 l2 n: nat): state_delay (gmap nat nat) nat := 
+Lemma verify_delay_state_fib' l1 l2 n1 n2 n:
+    ∀ γ, points_to γ l1 n1 ∗ points_to γ l2 n2 -∗
+            wp (state_interp γ) (iter_state_delay (fib_state' l1 l2) n) (post' n1 n2 n).
+Proof.
+    iIntros (γ) "(Hl1 & Hl2)".
+    iLöb as "IH" forall (n n1 n2).
+    iApply wp_iter.
+    destruct n as [| n'] eqn: E.
+    - iApply wp_fmap. iApply (wp_get with "Hl1").
+      iIntros "Hl1". done.
+    -
+     iApply wp_bind. iApply (wp_get with "Hl1"). iIntros "Hl1".
+     iApply wp_bind. iApply (wp_get with "Hl2"). iIntros "Hl2".
+     iApply wp_bind. iApply (wp_put with "Hl1"). iIntros "Hl1".
+     iApply wp_bind. iApply (wp_put with "Hl2"). iIntros "Hl2".
+     iApply wp_return. 
+     iNext. 
+     iSpecialize ("IH" with "Hl1 Hl2").
+     iApply (wp_strong_mono with "IH").
+     iIntros (v Hv) "!%". subst v.
+     apply coq_fib_move'.
+Qed.
+
+Definition fib_state (n: nat): state_delay (gmap nat nat) nat := 
+    l1 ← alloc 0 ;
+    l2 ← alloc 1 ;
     iter_state_delay (fib_state' l1 l2) n.
 
-Lemma verify_delay_state_fib l1 l2 n:
-    ∀ γ, points_to γ l1 1 ∗ points_to γ l2 1 -∗
-            wp (state_interp γ) (fib_state l1 l2 n) (λ ret, ⌜ret = coq_fib 0 1 n⌝).
+Lemma verify_delay_state_fib γ n:
+     ⊢ wp (state_interp γ) (fib_state n) (post n).
 Proof.
-Admitted.
+    iApply wp_bind. iApply wp_alloc. iIntros (l1) "Hl1".
+    iApply wp_bind. iApply wp_alloc. iIntros (l2) "Hl2".
+    iApply verify_delay_state_fib'. iFrame.
+Qed.
