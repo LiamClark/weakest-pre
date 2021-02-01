@@ -84,9 +84,9 @@ CoFixpoint iter {ST A B} (f: A -> delay_st ST (A + B)) : A -> delay_st ST B :=
 
 (* do I want to use the state monad here or expose the pairs? *)
 
-Definition wp {Σ} {R V} (SI: gmap nat V -> iProp Σ) (e: expr V R) (Φ: R -> iProp Σ): iProp Σ.
-Admitted.
 
+
+(* Curry the value R so it can be changed by the dependent pattern match on c *)
 Definition foo {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop.
 refine (match c with
         |GetE l  => λ v, σ !! l = Some v /\ σ' = σ 
@@ -105,29 +105,24 @@ refine(λ R e Φ,
         |Answer x => Φ x 
         |Think e' => ▷ go R e' Φ
         |Fork e' k => ▷ (go R k Φ ∗ go unit e' (λ _, True))
-        |Vis c k => ∀σ, SI σ ==∗ ∃σ' v, ⌜foo c σ σ' v⌝ ∗ SI σ' ∗ ▷ go _ (k v) Φ
+        |Vis c k => ∀σ, SI σ ==∗ ∃σ' v, ⌜foo c σ σ' v⌝ ∗ SI σ' ∗ ▷ (go R (k v)) Φ
         end
 )%I.
 Defined.
 
 Instance wp_pre_contractive {Σ A SI}: Contractive (@wp_pre Σ A SI).
 Proof.
-  rewrite /wp_delay_pre => n wp wp' Hwp e1 Φ.
+  rewrite /wp_pre => n wp wp' Hwp R e1 Φ.
   repeat (f_contractive || f_equiv); apply Hwp.
 Qed.
- 
-Definition wp_delay {Σ} {A}: delay A -> (A -> iProp Σ)-> iProp Σ := fixpoint wp_delay_pre.
 
-Definition wp {Σ} {ST A} (SI: ST -> iProp Σ) (e: state_delay ST A) (Φ: A -> iProp Σ): iProp Σ.
-refine(∀ σ, 
-    SI σ ==∗
-     wp_delay (runState e σ) (λ (res: option (ST * A)), 
-       match res with   
-       | Some (σ', x) => SI σ' ∗ Φ x 
-       | None => True
-       end)
-)%I.
-Defined.
+Definition wp' {Σ} {V} (SI: gmap nat V -> iProp Σ)
+              : ∀R, expr V R -> (R -> iProp Σ) ->iProp Σ :=
+    fixpoint (wp_pre SI ).
+
+Definition wp {Σ} {V R} (SI: gmap nat V -> iProp Σ) (e: expr V R) (Φ: R -> iProp Σ): iProp Σ := 
+    wp' SI R e Φ.
+
 
 Definition step_delay_st {ST A} (e: delay_st ST A): state ST (delay_st ST A) :=
     match e with
