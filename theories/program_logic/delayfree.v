@@ -4,7 +4,6 @@ From shiris.program_logic Require Import state.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
-From shiris.program_logic Require Import delayfree.
 Require Import Unicode.Utf8.
 
 (*
@@ -43,8 +42,8 @@ Arguments FreeE {_}.
 
 Definition expr (V: Type) := itree (envE V). 
 
-Definition get {V} (l: nat): expr V V := Vis (GetE l) Answer.
-Definition put {V} (l: nat) (v: V): expr V () := Vis (PutE l v) Answer .
+Definition get {V} (l: loc): expr V V := Vis (GetE l) Answer.
+Definition put {V} (l: loc) (v: V): expr V () := Vis (PutE l v) Answer .
 Definition alloc {V} (v: V): expr V loc := Vis (AllocE v) Answer.
 Definition free {V} (l: loc): expr V () := Vis (FreeE l) Answer.
 
@@ -82,57 +81,33 @@ CoFixpoint iter {ST A B} (f: A -> delay_st ST (A + B)) : A -> delay_st ST B :=
     delay_st_pipe f (case_ (Think ∘ iter f) Answer). *)
 
 
-(* do I want to use the state monad here or expose the pairs? *)
+Definition heap V := gmap nat V.
 
+Variant step_result (V A: Type): Type :=
+| Step (e: expr V A)
+| ForkStep (e: expr V A) (ef: expr V ()).
 
+Arguments Step {_ _}.
+Arguments ForkStep {_ _}.
 
-(* Curry the value R so it can be changed by the dependent pattern match on c *)
-Definition foo {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop.
-refine (match c with
-        |GetE l  => λ v, σ !! l = Some v /\ σ' = σ 
-        |PutE l v' => λ _, is_Some (σ !! l) /\ σ' = <[l := v']> σ
-        |AllocE v' => λ _, True
-        |FreeE l => λ _, True 
-        end
-).
-Defined.
-
-Definition wp_pre {Σ} {V} (SI: gmap loc V -> iProp Σ)
-     (go: discrete_funO (λ R, expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
-     discrete_funO (λ R, expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
-refine(λ R e Φ,
-        match e with
-        |Answer x => Φ x 
-        |Think e' => ▷ go R e' Φ
-        |Fork e' k => ▷ (go R k Φ ∗ go unit e' (λ _, True))
-        |Vis c k => ∀σ, SI σ ==∗ ∃σ' v, ⌜foo c σ σ' v⌝ ∗ SI σ' ∗ ▷ (go R (k v)) Φ
-        end
-)%I.
-Defined.
-
-Instance wp_pre_contractive {Σ A SI}: Contractive (@wp_pre Σ A SI).
-Proof.
-  rewrite /wp_pre => n wp wp' Hwp R e1 Φ.
-  repeat (f_contractive || f_equiv); apply Hwp.
-Qed.
-
-Definition wp' {Σ} {V} (SI: gmap nat V -> iProp Σ)
-              : ∀R, expr V R -> (R -> iProp Σ) ->iProp Σ :=
-    fixpoint (wp_pre SI ).
-
-Definition wp {Σ} {V R} (SI: gmap nat V -> iProp Σ) (e: expr V R) (Φ: R -> iProp Σ): iProp Σ := 
-    wp' SI R e Φ.
-
-
-Definition step_delay_st {ST A} (e: delay_st ST A): state ST (delay_st ST A) :=
-    match e with
-    | Answer x  => mret $ Answer x 
-    | Get n k     => k <$> getS 
-    | Put n s' k  => k <$> putS s'
-    | Think e'  => mret e'
+Definition step_vis {V R T}
+ (c: envE V T)
+ : (T -> expr V R) -> state (heap V) (step_result V R) :=
+    match c with
+    |GetE l   => λ k, (Step ∘ k) <$> (state.get l)
+    |PutE l v => λ k, (Step ∘ k) <$> (state.put l v)
+    |AllocE v => λ k, (Step ∘ k) <$> (state.alloc v)
+    |FreeE l  => λ k, (Step ∘ k) <$> (state.free l)
     end.
 
-Definition heap := gmap nat nat.
+Definition step_expr {V R} (e: expr V R): state (heap V) (step_result V R) :=
+    match e with
+    | Answer x  => mret $ Step $ Answer x 
+    | Vis stateE k => step_vis stateE k 
+    | Fork e' k => mret $ ForkStep k e'
+    | Think e'  =>  mret $ Step e'
+    end.
+
 
 Definition step_delay_st_heap {A} (e: delay_st heap A)
     : state heap (delay_st heap A).
