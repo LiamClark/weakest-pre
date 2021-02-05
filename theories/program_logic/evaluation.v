@@ -1,4 +1,4 @@
-From stdpp Require Import base gmap list.
+From stdpp Require Import base gmap list streams.
 From shiris.program_logic Require Import delayfree.
 
 (* Ask casper how to credit his blog post*)
@@ -8,28 +8,21 @@ Definition heap V := gmap nat V.
 (* How am I going to differentiate between the main thread that returns a value,
    And the spawned threads that do not. 
  *)
-Variant thread (V A: Type): Type :=
-| Main (e: expr V A)
+Variant thread (V: Type): Type :=
+| Main: ∀(A :Type ), expr V A -> thread V
 | Forked (e: expr V ()).
 
 Arguments Main {_ _}.
-Arguments Forked {_ _}.
+Arguments Forked {_}.
 
-Instance fmap_thread {V}: FMap (thread V) :=
-  λ A B f fa, match fa with
-              | Main e' => Main $ f <$> e'
-              | Forked e => Forked e
-  end.
-
-
-Record state (V A B: Type): Type := State {
-                                      runState: heap V -> list (thread V A) -> option (B * heap V * list (thread V A))
+Record state (V A: Type): Type := State {
+                                      runState: heap V -> list (thread V) -> option (A * heap V * list (thread V))
                                      }.
 
-Arguments State {_ _ _} .
-Arguments runState {_ _ _} .
+Arguments State {_ _} .
+Arguments runState {_ _} .
 
-Instance fmap_state {V A}: FMap (state V A) :=
+Instance fmap_state {V}: FMap (state V) :=
   λ A B f fa, 
          State $ λ h threads, 
                   match (runState fa) h threads with
@@ -37,9 +30,9 @@ Instance fmap_state {V A}: FMap (state V A) :=
                   | None => None
                   end.
 
-Instance mret_state {V A} : MRet (state V A) := λ A a, State $ λ h threads, Some (a, h, threads).
+Instance mret_state {V} : MRet (state V) := λ A a, State $ λ h threads, Some (a, h, threads).
 
-Instance mbind_state {V A}: MBind (state V A) :=
+Instance mbind_state {V}: MBind (state V) :=
   λ _ _ f ma, State $
                     λ h threads, match (runState ma) h threads with
                           | Some (x, h', threads) => runState (f x) h' threads
@@ -47,60 +40,60 @@ Instance mbind_state {V A}: MBind (state V A) :=
                           end.
 
 
-Definition modifyS' {V A B} (f: heap V -> B * heap V): state V A B :=
+Definition modifyS' {V A} (f: heap V -> A * heap V): state V A :=
   State $ λ h t, Some $ (f h, t).
 
 Section state_op.
-   Context {V A B: Type}.
+   Context {V A: Type}.
 
-   Definition getS: state V A (heap V) :=
+   Definition getS: state V (heap V) :=
      State $ λ h t, Some (h, h, t).
   
-   Definition putS (x: heap V): state V A unit :=
+   Definition putS (x: heap V): state V unit :=
      State $ λ h t, Some (tt, x, t).
 
-   Definition modifyS (f: heap V -> heap V): state V A () :=
+   Definition modifyS (f: heap V -> heap V): state V () :=
      modifyS' $ λ h, (tt, f h).
 
-   Definition fail: state V A B :=
+   Definition fail: state V A :=
      State $ λ h t, None.
 
-   Definition ret_fail (m: option B): state V A B := 
+   Definition ret_fail (m: option A): state V A := 
     match m with
     | Some x => mret x
     | None => fail
     end.
 
-    Definition fork (e: state V A B) (t: thread V A): state V A B :=
+    Definition fork (e: state V A) (t: thread V): state V A :=
       State $ λ h ts, (runState e) h (t :: ts).
     
-    Definition get_thread (n: nat): state V A (thread V A) :=
+    Definition get_thread (n: nat): state V (thread V) :=
       State $ λ h ts, (λ t,( t, h, ts)) <$> ( ts !! n).
 End state_op.
 
 
 Section heap_op.
-  Context {V A B: Type}.
+  Context {V: Type}.
 
-  Definition get (n: nat): state V A V :=
+  Definition get (n: nat): state V V :=
     getS ≫= λ h, ret_fail $ lookup n h.
 
-  Definition put (n: nat) (x : V) : state V A unit :=
+  Definition put (n: nat) (x : V) : state V unit :=
     modifyS <[n := x]>.
 
-  Definition alloc (v: V) : state V A nat :=
+  Definition alloc (v: V) : state V nat :=
     modifyS'$ λ st, 
                 let fresh := fresh $ dom (gset nat) st
                 in (fresh, <[fresh := v]> st).
 
-  Definition free (n: nat): state V A unit :=
+  Definition free (n: nat): state V unit :=
     modifyS $ delete n.
 End heap_op.
 
 
 Definition step_vis {V R T}
  (c: envE V T)
- : (T -> expr V R) -> state V R (expr V R) :=
+ : (T -> expr V R) -> state V (expr V R) :=
     match c with
     |GetE l   => λ k, k <$> (get l)
     |PutE l v => λ k, k <$> (put l v)
@@ -108,27 +101,26 @@ Definition step_vis {V R T}
     |FreeE l  => λ k, k <$> (free l)
     end.
 
-Definition step_expr {V R} (e: expr V R): state V R (expr V R) :=
+Definition step_expr {V R} (e: expr V R): state V (expr V R) :=
     match e with
     | Answer x  => mret $ Answer x 
     | Vis stateE k => step_vis stateE k 
-    | Fork e' k => fork (mret k) (Forked e')
+    | Fork e' k => fork (mret k) (Forked e') 
     | Think e'  =>  mret e'
     end.
 
 
-Fixpoint eval_single {V R} (n: nat) (e: expr V R) {struct n}: state V R (option R) :=
+Fixpoint eval_single {V R} (n: nat) (e: expr V R) {struct n}: state V (option R) :=
   match n with
   | O => mret $ None
   | S n' => (step_expr e) ≫= (eval_single n') 
   end. 
 
-Definition step_thread {V A} (t: thread V A) : state V A (thread V A).
-  refine(match t with 
+Definition step_thread {V} (t: thread V) : state V (thread V) :=
+    match t with 
     | Main e => Main <$> (step_expr e)
     | Forked e => Forked <$> (step_expr e) 
-    end).
-
+    end.
 
 Fixpoint split_and_circulate {A} (xs: list A) (f: A -> A) {struct xs}: (list A) :=
     match xs with
@@ -136,7 +128,7 @@ Fixpoint split_and_circulate {A} (xs: list A) (f: A -> A) {struct xs}: (list A) 
     | cons x xs' => xs' ++ [f x]
     end.
 
-Definition step_delay_st_threads {V A} 
+(* Definition step_delay_st_threads {V A} 
     (threads: list (Thread V A)) (s: heap V)
     :(heap V * (list (Thread V A))) :=
         match threads with 
@@ -146,22 +138,20 @@ Definition step_delay_st_threads {V A}
                         | Some (e', s') => (s', es' ++ [e'])
                         end
         end.
-
-Definition check_delay_st {ST A} (e: delay_st ST A): A + delay_st ST A :=
+ *)
+Definition check_exp {V A} (e: expr V A): A + expr V A :=
     match e with
     | Answer x  => inl x
-    | Get n k     => inr $ e
-    | Put n s' k  => inr $ e
     | Think e'  => inr $ e
+    | Fork e' k => inr $ Fork e' k
+    | Vis env k => inr $ Vis env k
     end.
 
-(* Todo check the order of effects with list and state here
-   and remove all these nested pattern matches
-*)
+(* Complete this definition using the evaluation order given by the stream of natural numbers *)
 Fixpoint eval_threaded_delay_st {ST A} 
     (n: nat) 
-    (threads: list (delay_st ST A))
-    (s: ST) {struct n}: option A :=
+    (order: stream nat)
+    {struct n}: option A :=
 
     match n with
     | O => None
