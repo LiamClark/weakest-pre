@@ -22,6 +22,7 @@ Instance fmap_thread {V}: FMap (thread V) :=
   end.
 
 
+(*update  *)
 Record state (V A B: Type): Type := State {
                                       runState: heap V -> list (thread V A) -> option (B * heap V * list (thread V A))
                                      }.
@@ -98,9 +99,9 @@ Section heap_op.
 End heap_op.
 
 
-Definition step_vis {V R T}
+Definition step_vis {V R T A}
  (c: envE V T)
- : (T -> expr V R) -> state V R (expr V R) :=
+ : (T -> expr V A) -> state V R (expr V A) :=
     match c with
     |GetE l   => λ k, k <$> (get l)
     |PutE l v => λ k, k <$> (put l v)
@@ -108,7 +109,7 @@ Definition step_vis {V R T}
     |FreeE l  => λ k, k <$> (free l)
     end.
 
-Definition step_expr {V R} (e: expr V R): state V R (expr V R) :=
+Definition step_expr {V R A} (e: expr V A): state V R (expr V A) :=
     match e with
     | Answer x  => mret $ Answer x 
     | Vis stateE k => step_vis stateE k 
@@ -117,17 +118,30 @@ Definition step_expr {V R} (e: expr V R): state V R (expr V R) :=
     end.
 
 
-Fixpoint eval_single {V R} (n: nat) (e: expr V R) {struct n}: state V R (option R) :=
+Fixpoint eval_single {V R} (n: nat) (e: expr V R) {struct n}: state V R R :=
   match n with
-  | O => mret $ None
+  | O => fail
   | S n' => (step_expr e) ≫= (eval_single n') 
   end. 
 
-Definition step_thread {V A} (t: thread V A) : state V A (thread V A).
+Definition step_thread {V R} (t: thread V R) : state V R (thread V R).
   refine(match t with 
     | Main e => Main <$> (step_expr e)
     | Forked e => Forked <$> (step_expr e) 
     end).
+Defined.
+(* get main expr from pool 
+   fix order indexing by modulo.
+*)
+Inductive scheduler V R := {
+  schedule: list (thread V R) * heap V -> nat * scheduler V R
+}.
+
+Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R.
+refine (_).
+
+
+
 
 
 Fixpoint split_and_circulate {A} (xs: list A) (f: A -> A) {struct xs}: (list A) :=
