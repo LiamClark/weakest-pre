@@ -21,62 +21,117 @@ Instance fmap_thread {V}: FMap (thread V) :=
               | Forked e => Forked e
   end.
 
+Definition is_main {V A} (t: thread V A): option (expr V A) :=
+  match t with
+  | Main e => Some e
+  | Forked _ => None
+  end.
 
-(*update  *)
+Variant error (A: Type): Type :=
+| Here (a: A)
+| ProgErr 
+| EvalErr.
+
+Arguments Here {_}.
+Arguments ProgErr {_}.
+Arguments EvalErr {_}.
+
+Instance error_fmap: FMap error := 
+  λ A B f fa,
+    match fa with
+    | Here a  => Here $ f a
+    | ProgErr => ProgErr
+    | EvalErr => EvalErr
+    end.
+
+Instance error_mret: MRet error :=
+  λ A x, Here x.
+
+Instance error_mbind: MBind error :=
+  λ A B f ma, 
+    match ma with
+    | Here a  => f a
+    | ProgErr => ProgErr
+    | EvalErr => EvalErr
+    end.
+
+Definition fail_prog {A}: error A := ProgErr.
+Definition fail_eval {A}: error A := EvalErr.
+
+Definition into_eval {A} (x: option A) :=
+  match x with
+  | Some x => Here x
+  | None   => EvalErr
+  end.
+
+Definition into_prog {A} (x: option A) :=
+  match x with
+  | Some x => Here x
+  | None   => ProgErr
+  end.
+
 Record state (V A B: Type): Type := State {
-                                      runState: heap V -> list (thread V A) -> option (B * heap V * list (thread V A))
+                                      runState: heap V -> list (thread V A) -> error (B * heap V * list (thread V A))
                                      }.
 
 Arguments State {_ _ _} .
 Arguments runState {_ _ _} .
 
-Instance fmap_state {V A}: FMap (state V A) :=
-  λ A B f fa, 
-         State $ λ h threads, 
-                  match (runState fa) h threads with
-                  | Some (x, heap, threads) => Some (f x, heap , threads)
-                  | None => None
-                  end.
+Definition map_1 {A B C D} (f: A -> D) (x: A * B * C): D * B * C :=
+  let '(x, y, z) := x in (f x, y, z).
 
-Instance mret_state {V A} : MRet (state V A) := λ A a, State $ λ h threads, Some (a, h, threads).
+
+Instance fmap_state {V A}: FMap (state V A) :=
+  λ B C f fa, 
+         State $ λ h threads,
+                  map_1 f <$> (runState fa) h threads.
+
+Instance mret_state {V A} : MRet (state V A) := λ A a, State $ λ h threads, Here (a, h, threads).
 
 Instance mbind_state {V A}: MBind (state V A) :=
-  λ _ _ f ma, State $
-                    λ h threads, match (runState ma) h threads with
-                          | Some (x, h', threads) => runState (f x) h' threads
-                          | None => None
-                          end.
+  λ _ _ f ma,
+     State $
+        λ h threads,
+           match (runState ma) h threads with
+           | Here (x, h', threads) => runState (f x) h' threads
+           | ProgErr => ProgErr 
+           | EvalErr => EvalErr
+           end.
 
+Definition lift_error {V A B} (x: error B): state V A B :=
+  State $ λ h ts, 
+        match x with
+        | Here a  => Here (a, h , ts)
+        | ProgErr => ProgErr
+        | EvalErr => EvalErr
+        end.
 
 Definition modifyS' {V A B} (f: heap V -> B * heap V): state V A B :=
-  State $ λ h t, Some $ (f h, t).
+  State $ λ h t, mret $ (f h, t).
 
 Section state_op.
    Context {V A B: Type}.
 
    Definition getS: state V A (heap V) :=
-     State $ λ h t, Some (h, h, t).
+     State $ λ h t, mret (h, h, t).
   
    Definition putS (x: heap V): state V A unit :=
-     State $ λ h t, Some (tt, x, t).
+     State $ λ h t, mret (tt, x, t).
 
    Definition modifyS (f: heap V -> heap V): state V A () :=
      modifyS' $ λ h, (tt, f h).
 
    Definition fail: state V A B :=
-     State $ λ h t, None.
+     State $ λ h t, fail_prog.
 
-   Definition ret_fail (m: option B): state V A B := 
-    match m with
-    | Some x => mret x
-    | None => fail
-    end.
+   Definition fork (e: state V A B) (t: thread V A): state V A B :=
+     State $ λ h ts, (runState e) h (t :: ts).
 
-    Definition fork (e: state V A B) (t: thread V A): state V A B :=
-      State $ λ h ts, (runState e) h (t :: ts).
-    
-    Definition get_thread (n: nat): state V A (thread V A) :=
-      State $ λ h ts, (λ t,( t, h, ts)) <$> ( ts !! n).
+   Definition get_threads: state V A (list (thread V A)) :=
+    State $ λ h ts, Here (ts, h , ts).
+
+   Definition get_thread (n: nat): state V A (thread V A) :=
+     State $ λ h ts, (λ t, (t, h, ts)) <$> into_eval (ts !! n).
 End state_op.
 
 
@@ -84,7 +139,7 @@ Section heap_op.
   Context {V A B: Type}.
 
   Definition get (n: nat): state V A V :=
-    getS ≫= λ h, ret_fail $ lookup n h.
+    getS ≫= λ h, lift_error $ into_prog $ lookup n h.
 
   Definition put (n: nat) (x : V) : state V A unit :=
     modifyS <[n := x]>.
@@ -124,12 +179,12 @@ Fixpoint eval_single {V R} (n: nat) (e: expr V R) {struct n}: state V R R :=
   | S n' => (step_expr e) ≫= (eval_single n') 
   end. 
 
-Definition step_thread {V R} (t: thread V R) : state V R (thread V R).
-  refine(match t with 
+Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
+    match t with 
     | Main e => Main <$> (step_expr e)
     | Forked e => Forked <$> (step_expr e) 
-    end).
-Defined.
+    end.
+
 (* get main expr from pool 
    fix order indexing by modulo.
 *)
@@ -137,8 +192,26 @@ Inductive scheduler V R := {
   schedule: list (thread V R) * heap V -> nat * scheduler V R
 }.
 
+Fixpoint check_main {V R} (ts: list (thread V R)): option R :=
+         match ts with
+         | [] => None
+         | t :: ts' => is_main t ≫= is_done
+         end.
+
+Arguments schedule {_ _}.
 Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R.
-refine (_).
+refine (match n with
+        | O    => lift_error fail_eval
+        | S n' =>  
+                  ts ← get_threads ;  
+                  h  ← getS ; 
+                  let '(nt, s') := (schedule s) (ts, h) in
+                  curThread ← get_thread nt ; 
+                  updatedThread ← step_thread curThread ;
+                  _
+                  
+                  (* lift_error fail_prog *)
+end).
 
 
 

@@ -88,5 +88,13 @@ CoFixpoint loop {V A B C} (f: (C + A) -> expr V (C + B)): A -> expr V B :=
                  end
     ) (inr a).
 
+Definition is_done {V R} (e: expr V R): option R :=
+    match e with
+    | Answer r => Some r
+    | Think t  => None 
+    | Fork e k => None 
+    | Vis e k  => None 
+    end.
+
 
 
