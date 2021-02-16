@@ -132,6 +132,10 @@ Section state_op.
 
    Definition get_thread (n: nat): state V A (thread V A) :=
      State $ λ h ts, (λ t, (t, h, ts)) <$> into_eval (ts !! n).
+
+   Definition set_thread (n: nat) (t: thread V A): state V A () :=
+    State $ λ h ts, Here $ (tt, h,  <[n:=t]> ts).
+   
 End state_op.
 
 
@@ -192,75 +196,29 @@ Inductive scheduler V R := {
   schedule: list (thread V R) * heap V -> nat * scheduler V R
 }.
 
+Arguments schedule {_ _}.
+
 Fixpoint check_main {V R} (ts: list (thread V R)): option R :=
          match ts with
          | [] => None
          | t :: ts' => is_main t ≫= is_done
          end.
 
-Arguments schedule {_ _}.
-Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R.
-refine (match n with
-        | O    => lift_error fail_eval
-        | S n' =>  
-                  ts ← get_threads ;  
-                  h  ← getS ; 
-                  let '(nt, s') := (schedule s) (ts, h) in
-                  curThread ← get_thread nt ; 
-                  updatedThread ← step_thread curThread ;
-                  _
-                  
-                  (* lift_error fail_prog *)
-end).
-
-
-
-
-
-Fixpoint split_and_circulate {A} (xs: list A) (f: A -> A) {struct xs}: (list A) :=
-    match xs with
-    | nil => nil
-    | cons x xs' => xs' ++ [f x]
-    end.
-
-Definition step_delay_st_threads {V A} 
-    (threads: list (Thread V A)) (s: heap V)
-    :(heap V * (list (Thread V A))) :=
-        match threads with 
-        | nil => (s, nil)
-        | cons e es' => match (runState (step_expr e) s) with
-                        | None => (s, nil)
-                        | Some (e', s') => (s', es' ++ [e'])
-                        end
-        end.
-
-Definition check_delay_st {ST A} (e: delay_st ST A): A + delay_st ST A :=
-    match e with
-    | Answer x  => inl x
-    | Get n k     => inr $ e
-    | Put n s' k  => inr $ e
-    | Think e'  => inr $ e
-    end.
-
-(* Todo check the order of effects with list and state here
-   and remove all these nested pattern matches
-*)
-Fixpoint eval_threaded_delay_st {ST A} 
-    (n: nat) 
-    (threads: list (delay_st ST A))
-    (s: ST) {struct n}: option A :=
-
-    match n with
-    | O => None
-    | S n' => let (s', threads') := (step_delay_st_threads threads s)
-              in match threads' with
-                 | nil => None
-                 | cons e' _ => match check_delay_st e' with
-                                | inl x => Some x
-                                | inr e'' => eval_threaded_delay_st n' threads' s'
-                                end
-                 end
-    end.
-
-
-
+Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
+  match n with
+    | O    => lift_error fail_eval
+    | S n' =>  
+              ts ← get_threads ;  
+              h  ← getS ; 
+              let '(nt, s') := (schedule s) (ts, h) in
+              let thread_count := length ts in
+              let thread_index := nt mod thread_count in
+              curThread ← get_thread thread_index ; 
+              updatedThread ← step_thread curThread ;
+              set_thread thread_index updatedThread ;;
+              ts' ← get_threads ;
+              match check_main ts' with
+              | Some r => mret r
+              | None => eval_threaded n' s' 
+              end
+  end.
