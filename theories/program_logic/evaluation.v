@@ -1,4 +1,4 @@
-From stdpp Require Import base gmap list.
+From stdpp Require Import base gmap list streams.
 From shiris.program_logic Require Import delayfree.
 
 (* Ask casper how to credit his blog post*)
@@ -107,15 +107,15 @@ Definition lift_error {V A B} (x: error B): state V A B :=
         end.
 
 Definition modifyS' {V A B} (f: heap V -> B * heap V): state V A B :=
-  State $ λ h t, mret $ (f h, t).
+  State $ λ h ts, mret $ (f h, ts).
 
 Section state_op.
    Context {V A B: Type}.
 
-   Definition getS: state V A (heap V) :=
+   Definition get_heap: state V A (heap V) :=
      State $ λ h t, mret (h, h, t).
   
-   Definition putS (x: heap V): state V A unit :=
+   Definition put_heap (x: heap V): state V A unit :=
      State $ λ h t, mret (tt, x, t).
 
    Definition modifyS (f: heap V -> heap V): state V A () :=
@@ -124,8 +124,19 @@ Section state_op.
    Definition fail: state V A B :=
      State $ λ h t, fail_prog.
 
+  (*
+  There might be something tricky here,
+  if a thread executions forks the updated thread is later set.
+  so we do
+  If we had [t1] then t1 is index 0.
+  t <- get_thread n ;
+  Fork occurs ;
+  now we have [t1, t2]
+  set_thread t' n
+  so the index is stable
+  *)
    Definition fork (e: state V A B) (t: thread V A): state V A B :=
-     State $ λ h ts, (runState e) h (t :: ts).
+     State $ λ h ts, (runState e) h (ts ++ [t]).
 
    Definition get_threads: state V A (list (thread V A)) :=
     State $ λ h ts, Here (ts, h , ts).
@@ -143,7 +154,7 @@ Section heap_op.
   Context {V A B: Type}.
 
   Definition get (n: nat): state V A V :=
-    getS ≫= λ h, lift_error $ into_prog $ lookup n h.
+    get_heap ≫= λ h, lift_error $ into_prog $ lookup n h.
 
   Definition put (n: nat) (x : V) : state V A unit :=
     modifyS <[n := x]>.
@@ -192,11 +203,27 @@ Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
 (* get main expr from pool 
    fix order indexing by modulo.
 *)
-Inductive scheduler V R := {
+CoInductive scheduler V R := Scheduler {
   schedule: list (thread V R) * heap V -> nat * scheduler V R
 }.
 
 Arguments schedule {_ _}.
+Arguments Scheduler {_ _}.
+
+CoFixpoint const_scheduler {V R} (n: nat): scheduler V R :=
+  Scheduler $  λ '(ts, h), (n, const_scheduler n).
+
+
+Fixpoint list_scheduler {V R} (s: list nat) (n: nat): scheduler V R :=
+  Scheduler $ λ '(ts, h),
+   match s with
+    | []      => (n, const_scheduler n)
+    | n' :: ns => (n', list_scheduler ns n)
+    end.
+
+CoFixpoint stream_scheduler {V R} (s: stream nat): scheduler V R :=
+  Scheduler $ λ '(ts, h),
+    let '(scons x xs) := s in (x, stream_scheduler xs).
 
 Fixpoint check_main {V R} (ts: list (thread V R)): option R :=
          match ts with
@@ -204,21 +231,83 @@ Fixpoint check_main {V R} (ts: list (thread V R)): option R :=
          | t :: ts' => is_main t ≫= is_done
          end.
 
+Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R ) :=
+      ts ← get_threads ;  
+       h  ← get_heap ; 
+       let '(nt, s') := (schedule s) (ts, h) in
+       let thread_count := length ts in
+       let thread_index := nt mod thread_count in
+       curThread ← get_thread thread_index ; 
+       updatedThread ← step_thread curThread ;
+       set_thread thread_index updatedThread ;; 
+       mret s'.
+
 Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
   match n with
     | O    => lift_error fail_eval
-    | S n' =>  
-              ts ← get_threads ;  
-              h  ← getS ; 
-              let '(nt, s') := (schedule s) (ts, h) in
-              let thread_count := length ts in
-              let thread_index := nt mod thread_count in
-              curThread ← get_thread thread_index ; 
-              updatedThread ← step_thread curThread ;
-              set_thread thread_index updatedThread ;;
+    | S n' => s' ← single_step_thread s;
               ts' ← get_threads ;
               match check_main ts' with
               | Some r => mret r
               | None => eval_threaded n' s' 
               end
   end.
+
+Definition fstt {A B C} (x: A * B * C): A := x.1.1.
+
+Definition run_program {V R} (n: nat) (s: scheduler V R) (e: expr V R): error R.
+refine (fst ∘ fst <$> runState (eval_threaded n s) ∅ [Main e]).
+Defined.
+
+Definition incr (l: loc): expr nat nat. 
+refine(delayfree.get l ≫= λ n, delayfree.put l (S n) ;; mret n).
+Defined.
+
+Definition decr (l: loc): expr nat nat. 
+refine(delayfree.get l ≫= λ n, delayfree.put l (n - 1) ;; mret n).
+Defined.
+
+Definition prog: expr nat nat.
+refine (
+  l ← delayfree.alloc 5;
+  Fork
+    (* side thread *)
+    (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt)
+    (* (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt) *)
+    (* main thread *)
+    (decr l ;; decr l ;; delayfree.get l)
+  ).
+  exact nat.
+Defined.
+
+Definition prog_scheduler {V R: Type} := (@list_scheduler V R [0; 0; 5 ] 0).
+
+Definition dump_heap {A B C} (x: A * B * C): (A * C) :=
+  (x.1.1, x.2).
+
+Check (runState (single_step_thread prog_scheduler) ∅ [Main prog]).
+
+Definition steps {V R}: state V R (scheduler V R).
+refine( 
+   (((single_step_thread prog_scheduler ≫= single_step_thread)
+    ≫= single_step_thread) ≫= single_step_thread)
+).
+Defined.
+
+(*
+ index 0 is the main thread
+ because it will exit with 3 if we just evaluate it.
+ now if we add evaluations in thread 1 it needs more then one step to actually update
+ because decr is atleast 2 steps
+*)
+Lemma test_5: run_program 50 (list_scheduler [0;0;0;0;1;1;1;1;1] 0) prog = Here 5.
+Proof.
+  vm_compute.
+  done.
+Qed.
+
+Lemma test_3: run_program 50 (list_scheduler [] 0) prog = Here 3.
+Proof.
+  vm_compute.
+  done.
+Qed.
