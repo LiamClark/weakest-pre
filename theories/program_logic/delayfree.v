@@ -80,6 +80,28 @@ Definition case_ {A B C}  (f: A -> C) (g: B -> C)
 CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
     pipe f (case_ (Think ∘ iter f) Answer). 
 
+Definition expr_frob {V R} (e: expr V R): expr V R.
+refine ( match e with
+          |Answer x => Answer x
+          |Think e' => Think e'
+          |Fork e1 e2 => Fork e1 e2
+          |Vis c k => Vis c k
+end).
+Defined.
+
+Lemma expr_frob_eq {V R} (e: expr V R): expr_frob e = e.
+Proof.
+  by destruct e.
+Qed.
+
+Lemma iter_unfold {V R B} (f: R -> expr V (R + B)) (x: R):
+   iter f x = f x ≫= case_ (Think ∘ iter f) Answer.
+Proof.
+  rewrite <- (expr_frob_eq (iter f x)).
+  rewrite <- (expr_frob_eq (_ ≫= _)).
+  done.
+Qed.
+
 CoFixpoint loop {V A B C} (f: (C + A) -> expr V (C + B)): A -> expr V B :=
     λ a, iter (λ ca,
                  cb ← f ca ;

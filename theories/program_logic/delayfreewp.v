@@ -48,77 +48,112 @@ Proof.
   apply (fixpoint_unfold (wp_pre SI)).
 Qed.
 
-Section wp_rules.
-  Context {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ).
 
-  Lemma wp_return (x: R) (Φ: R -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
-  Proof.
-    iIntros"H".
-    by rewrite wp_unfold.
-  Qed.
+Lemma wp_return {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+   (x: R) (Φ: R -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
+Proof.
+  iIntros"H".
+  by rewrite wp_unfold.
+Qed.
 
-  Lemma wp_think (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI e Φ -∗ wp SI (Think e) Φ.
-  Proof.
-    iIntros "Hwp".
-    iEval (rewrite wp_unfold). 
+Lemma wp_think {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+   (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI e Φ -∗ wp SI (Think e) Φ.
+Proof.
+  iIntros "Hwp".
+  iEval (rewrite wp_unfold). 
+  done.
+Qed.
+
+Lemma wp_bind {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ)
+  (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R): 
+  wp SI e (λ x, wp SI (f x) Φ) -∗ wp SI (e ≫= f) Φ.
+Proof.
+  unfold mbind, itree_bind.
+  iIntros "H". iLöb as "IH" forall (e).
+  iEval (rewrite wp_unfold).
+  unfold wp_pre.
+  destruct e; simpl.
+  - do 2 (rewrite wp_unfold /=). unfold wp_pre.
     done.
+  - iEval (rewrite wp_unfold /=) in "H".
+    iNext. iApply "IH". done.
+  - iEval (rewrite wp_unfold /=) in "H".
+    iNext. iDestruct "H" as "(H & $)". 
+    iApply "IH". done.
+  - iIntros (σ)  "HSi".
+    iEval (rewrite wp_unfold /=) in "H".
+    iMod ("H" $! σ with "HSi") as "H". iModIntro.
+    iDestruct ("H") as (σ' v) "H".
+    iExists σ', v.
+    iDestruct "H" as  "($ & $ & Hwp)". 
+    iNext. iApply "IH". done.
+Qed.
+
+Lemma wp_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+   (e: expr V R) (Φ Ψ: R -> iProp Σ)
+   :wp SI e Φ -∗ (∀ v, Φ v -∗ Ψ v) -∗ wp SI e Ψ.
+Proof.
+  iLöb as "IH" forall (e).
+  rewrite wp_unfold.
+  rewrite wp_unfold.
+  iIntros "Hwp H".
+  destruct e; simpl.
+  - iApply ("H" with "Hwp").
+  - iNext. iApply ("IH" $! e with "Hwp H"). 
+  - iNext. 
+    iDestruct "Hwp" as "(Hwpe2 & $)".
+    iApply ("IH" $! e2 with "Hwpe2 H"). 
+  - iIntros (σ) "HSi".
+    iMod ("Hwp" $! σ with "HSi" ) as "Hwp'".
+    iDestruct "Hwp'" as (σ' v) "(Hcom & HSi' & Hwp'')".
+    iModIntro. iExists σ', v. iFrame. iNext.
+    iApply ("IH"  with "Hwp'' H"). 
   Qed.
 
- (*
-   This proof is huge becasue of the case distinction on commands
-   is that avoidable?
+(* 
+  This is currently not provable because there is no update modality
+  around every branch of our wp definition. The update is only there for Vis events.
+  Do I introduce extra updates or first prove the weaker version of this?
  *)
-  Lemma wp_bind {B} (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R): 
-    wp SI e (λ x, wp SI (f x) Φ) -∗ wp SI (e ≫= f) Φ.
-  Proof.
-    unfold mbind, itree_bind.
-    iIntros "H". iLöb as "IH" forall (e).
-    iEval (rewrite wp_unfold).
-    unfold wp_pre.
-    destruct e; simpl.
-    - do 2 (rewrite wp_unfold /=). unfold wp_pre.
-      done.
-    - iEval (rewrite wp_unfold /=) in "H".
-      iNext. iApply "IH". done.
-    - iEval (rewrite wp_unfold /=) in "H".
-      iNext. iDestruct "H" as "(H & $)". 
-      iApply "IH". done.
-    - iIntros (σ)  "HSi".
-      destruct e.
-      + iEval (rewrite wp_unfold /=) in "H".
-        iMod ("H" $! σ with "HSi") as "H". iModIntro.
-        iDestruct ("H") as (σ' v) "H".
-        iExists σ', v.
-        iDestruct "H" as (Hlookup) "(HSi' & Hwp')". 
-        iSplit.
-        * iPureIntro. done.
-        * iFrame. iNext. iApply "IH". done.
-      + 
-        iEval (rewrite wp_unfold /=) in "H".
-        iMod ("H" $! σ with "HSi") as "H". iModIntro.
-        iDestruct ("H") as (σ' vtt) "H".
-        iExists σ', vtt.
-        iDestruct "H" as (Hput) "(HSi' & Hwp')". 
-        iSplit.
-        * iPureIntro. done.
-        * iFrame. iNext.
-          iApply "IH". done.
-      + iEval (rewrite wp_unfold /=) in "H".
-        iMod ("H" $! σ with "HSi") as "H". iModIntro.
-        iDestruct ("H") as (σ' vtt) "H".
-        iExists σ', vtt.
-        iDestruct "H" as (Hput) "(HSi' & Hwp')". 
-        iSplit.
-        * iPureIntro. done.
-        * iFrame. iNext.
-          iApply "IH". done.
-      + iEval (rewrite wp_unfold /=) in "H".
-        iMod ("H" $! σ with "HSi") as "H". iModIntro.
-        iDestruct ("H") as (σ' vtt) "H".
-        iExists σ', vtt.
-        iDestruct "H" as (Hput) "(HSi' & Hwp')". 
-        iSplit.
-        * iPureIntro. done.
-        * iFrame. iNext.
-          iApply "IH". done.
-  Qed.
+Lemma wp_strong_mono_delay {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (e: expr V R)
+  (Φ Ψ: R -> iProp Σ)
+  : wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ.
+Proof.
+  iLöb as "IH" forall (e).
+  rewrite wp_unfold.
+  rewrite wp_unfold.
+  iIntros "Hwp H".
+  destruct e; simpl.
+  - iDestruct ("H" with "Hwp") as "bla".
+    admit.
+    (* iMod "Hwp" as "Hwp". iApply ("H" with "Hwp"). *)
+  - admit.
+    (* iMod "Hwp" as "Hwp". iModIntro. *)
+    (* iNext. iApply ("IH" $! e with "Hwp H").  *)
+Admitted.
+
+Lemma wp_delay_fmap {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) 
+  (f: R -> B) (Φ: B -> iProp Σ) (e: expr V R)
+  : wp SI e (Φ ∘ f ) -∗ wp SI (f <$> e) Φ. 
+Proof.
+  iIntros "Hwp".
+  iApply wp_bind.
+  iApply (wp_mono with "Hwp").
+  iIntros (x) "Hpost /=".
+  iApply (wp_return with "Hpost").
+Qed.
+
+Lemma wp_delay_iter {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) (Φ: B -> iProp Σ)
+  (x: R)
+  (f: R -> expr V (R + B)):
+  wp SI (f x) (case_ (λ x, ▷ wp SI (iter f x) Φ) Φ) -∗
+  wp SI (iter f x) Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite iter_unfold.
+  iApply wp_bind.
+  iApply (wp_mono with "Hwp").
+  iIntros ([a | b]) "H /=".
+  - by iApply wp_think.
+  - by iApply wp_return.
+Qed.
