@@ -70,9 +70,10 @@ Definition into_prog {A} (x: option A) :=
   | None   => ProgErr
   end.
 
-Record state (V A B: Type): Type := State {
-                                      runState: heap V -> list (thread V A) -> error (B * heap V * list (thread V A))
-                                     }.
+Record state (V A B: Type): Type := 
+  State {
+    runState: heap V -> list (thread V A) -> error (B * heap V * list (thread V A))
+  }.
 
 Arguments State {_ _ _} .
 Arguments runState {_ _ _} .
@@ -92,19 +93,13 @@ Instance mbind_state {V A}: MBind (state V A) :=
   λ _ _ f ma,
      State $
         λ h threads,
-           match (runState ma) h threads with
-           | Here (x, h', threads) => runState (f x) h' threads
-           | ProgErr => ProgErr 
-           | EvalErr => EvalErr
-           end.
-
+           '(x, h', threads) ← (runState ma) h threads ;
+            runState (f x) h' threads.
+           
 Definition lift_error {V A B} (x: error B): state V A B :=
   State $ λ h ts, 
-        match x with
-        | Here a  => Here (a, h , ts)
-        | ProgErr => ProgErr
-        | EvalErr => EvalErr
-        end.
+        a ← x ;
+        Here (a, h, ts).
 
 Definition modifyS' {V A B} (f: heap V -> B * heap V): state V A B :=
   State $ λ h ts, mret $ (f h, ts).
@@ -233,14 +228,14 @@ Fixpoint check_main {V R} (ts: list (thread V R)): option R :=
 
 Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R ) :=
       ts ← get_threads ;  
-       h  ← get_heap ; 
-       let '(nt, s') := (schedule s) (ts, h) in
-       let thread_count := length ts in
-       let thread_index := nt mod thread_count in
-       curThread ← get_thread thread_index ; 
-       updatedThread ← step_thread curThread ;
-       set_thread thread_index updatedThread ;; 
-       mret s'.
+      h  ← get_heap ; 
+      let '(nt, s')    := (schedule s) (ts, h) in
+      let thread_count := length ts in
+      let thread_index := nt mod thread_count in
+      curThread ← get_thread thread_index ; 
+      updatedThread ← step_thread curThread ;
+      set_thread thread_index updatedThread ;; 
+      mret s'.
 
 Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
   match n with
@@ -274,8 +269,8 @@ refine (
     (* side thread *)
     (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt)
     (* (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt) *)
-    (* main thread *)
-    (decr l ;; decr l ;; delayfree.get l)
+  (* main thread *)
+  (decr l ;; decr l ;; delayfree.get l)
   ).
   exact nat.
 Defined.

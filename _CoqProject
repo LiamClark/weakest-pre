@@ -2,4 +2,6 @@
 -arg -w -arg -notation-overridden,-redundant-canonical-projection,-several-object-files,-convert_concl_no_check,-undeclared-scope,-ambiguous-paths
 theories/program_logic/state.v
 theories/program_logic/weakestpre.v
+theories/program_logic/evaluation.v
 theories/program_logic/delayfree.v
+theories/program_logic/delaystate.v

@@ -13,8 +13,6 @@ Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
           SI σ' ∗
           Φ a.
 
-About fixpoint. 
-
 Section state_wp.
   Context  {Σ} {ST} (SI: ST -> iProp Σ).
   Implicit Types P Q R: iProp Σ.
@@ -74,7 +72,6 @@ Section state_wp.
     eauto with iFrame.
   Qed.
 
-  Print state_wp.
   (* The way the post condition gets implied here seems, dodgy? *)
   Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ state_wp SI (getS) Φ.
   Proof.
@@ -142,7 +139,6 @@ Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
 Section state_wp_gp.
   Context `{! inG Σ (heapR natO)}.
 
-  About own.
  (* Now come the rule that needs the points to connective in their weakest pre definition.
      We therefore first define this in terms of the Authorative camera.
    *)
@@ -152,17 +148,6 @@ Section state_wp_gp.
 
   Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
   Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
-
-  About auth_both_valid.
-  About singleton_included_exclusive.
-  Locate "=".
-  About Excl'.
-  About Excl.
-  Search equiv f_equal.
-  Search LeibnizEquiv.
-  Search fmap f_equal.
-  About leibniz_equiv_iff.
-  About f_equiv.
 
   Context (γ: gname).
 
@@ -194,42 +179,7 @@ Section state_wp_gp.
     apply rewrite_lookups.
     assumption.
   Qed.
-
-  (*useful helper lemmas for combining owns *)
-  About own_valid.
-  About own_op.
-  About own_valid_2.
-  About own_update_2.
-  (*useful helper lemmas for deriving equality from validity*)
-  Search auth valid.
-  Search excl.
-  About excl_valid.
-  Print excl_valid.
-  About auth_both_valid.
-  Search included gmap.
-  About singleton_included_exclusive.
-  About bi_iff.
-  About bi_and.
-  Locate "∧".
-  Search bi_iff.
-  Search bi_and.
-  Search fmap lookup.
-  About map_fmap_equiv_ext.
-  About lookup_fmap.
-  About map_fmap_ext.
-  About Excl'.
-
-  Locate "~~>".
-  Search cmra_update.
-  (* update both parts of a composition with a frame perserving update *)
-  About cmra_update_op.
-  About prod_local_update.
-  About singleton_local_update.
-  About fmap_insert.
-  About replace_local_update.
-  About IdFree.
-
-  About lookup_fmap.
+  
   Lemma lift_excl_some σ n v: σ !! n = Some v -> lift_excl σ !! n = Some (Excl v).
   Proof.
     intro H.
@@ -238,11 +188,6 @@ Section state_wp_gp.
     rewrite H.
     reflexivity.
   Qed.
-
-  Search fmap insert.
-  About exclusive_local_update.
-  About excl_valid.
-  Locate "✓".
 
   Lemma points_to_update σ n v w:
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
@@ -265,12 +210,6 @@ Section state_wp_gp.
         reflexivity.
     Qed.
 
-  Locate "∉".
-  Locate "∅". 
-  Locate "◯".
-  Search dom.
-  Search empty.
-
   Lemma si_alloc σ v:
     let l := fresh (dom (gset nat) σ)
     in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
@@ -288,8 +227,6 @@ Section state_wp_gp.
   Qed.
 
 
-  SearchAbout fmap_delete.
-  About Exclusive.
   Lemma si_free σ v l:
    state_interp γ σ -∗ points_to γ l v ==∗ state_interp γ (delete l σ).
   Proof.
@@ -350,12 +287,6 @@ Section state_wp_gp.
 End state_wp_gp.
 
 Set Printing Coercions.
-About uPred.pure_soundness.
-About bupd_plain.
-About own_alloc.
-About bi_emp_valid.
-Locate "⊢".
-About Excl.
 (*
   alloc+ free.
   adequacy.
@@ -365,10 +296,6 @@ About Excl.
  *)
  Section state_ad.
   Context `{! inG Σ (heapR natO)}.
-
-  About cmra_valid.
-  About excl_valid.
-  Print gmap_valid.
 
   Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat nat) A) (st: gmap nat nat):
     (∀γ, ⊢ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
