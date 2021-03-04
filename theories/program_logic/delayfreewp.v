@@ -71,8 +71,11 @@ Lemma wp_think {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
 Proof.
   iIntros "Hwp".
   iEval (rewrite wp_unfold). 
+  unfold wp_pre. iModIntro.
   done.
 Qed.
+
+
 
 Lemma wp_bind {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ)
   (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R): 
@@ -100,33 +103,7 @@ Proof.
     iApply "IH". done.
 Qed.
 
-(* Lemma wp_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
-   (e: expr V R) (Φ Ψ: R -> iProp Σ)
-   :wp SI e Φ -∗ (∀ v, Φ v -∗ Ψ v) -∗ wp SI e Ψ.
-Proof.
-  iLöb as "IH" forall (e).
-  rewrite wp_unfold.
-  rewrite wp_unfold.
-  iIntros "Hwp H".
-  destruct e; simpl.
-  - iApply ("H" with "Hwp").
-  - iNext. iApply ("IH" $! e with "Hwp H"). 
-  - iNext. 
-    iDestruct "Hwp" as "(Hwpe2 & $)".
-    iApply ("IH" $! e2 with "Hwpe2 H"). 
-  - iIntros (σ) "HSi".
-    iMod ("Hwp" $! σ with "HSi" ) as "Hwp'".
-    iDestruct "Hwp'" as (σ' v) "(Hcom & HSi' & Hwp'')".
-    iModIntro. iExists σ', v. iFrame. iNext.
-    iApply ("IH"  with "Hwp'' H"). 
-  Qed. *)
-
-(* 
-  This is currently not provable because there is no update modality
-  around every branch of our wp definition. The update is only there for Vis events.
-  Do I introduce extra updates or first prove the weaker version of this?
- *)
-Lemma wp_strong_mono_delay {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (e: expr V R)
+Lemma wp_strong_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (e: expr V R)
   (Φ Ψ: R -> iProp Σ)
   : wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ.
 Proof.
@@ -139,7 +116,9 @@ Proof.
     done.
   - iMod "Hwp". iIntros "!> !>". 
     iApply ("IH" $! e with "Hwp H").
-  - admit.
+  - iMod "Hwp". iIntros "!> !>". 
+    iDestruct "Hwp" as "(Hwpe2 & $)".
+    iApply ("IH" $! e2 with "Hwpe2 H").
   - iIntros (σ) "HSi".
     iMod ("Hwp" with "HSi") as "Hwp".
     iIntros "!> !>".
@@ -147,33 +126,70 @@ Proof.
     iDestruct "Hwp" as (σ' v) "(Hcom & HSi & Hwp)".
     iExists σ', v. iFrame. 
     iApply ("IH"  with "Hwp H"). 
-Admitted.
+Qed.
 
-(* Lemma wp_delay_fmap {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ)  *)
-  (* (f: R -> B) (Φ: B -> iProp Σ) (e: expr V R) *)
-  (* : wp SI e (Φ ∘ f ) -∗ wp SI (f <$> e) Φ.  *)
-(* Proof. *)
-  (* iIntros "Hwp". *)
-  (* iApply wp_bind. *)
-  (* iApply (wp_mono with "Hwp"). *)
-  (* iIntros (x) "Hpost /=". *)
-  (* iApply (wp_return with "Hpost"). *)
-(* Qed. *)
-(*  *)
-(* Lemma wp_delay_iter {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) (Φ: B -> iProp Σ) *)
-  (* (x: R) *)
-  (* (f: R -> expr V (R + B)): *)
-  (* wp SI (f x) (case_ (λ x, ▷ wp SI (iter f x) Φ) Φ) -∗ *)
-  (* wp SI (iter f x) Φ. *)
-(* Proof. *)
-  (* iIntros "Hwp". *)
-  (* rewrite iter_unfold. *)
-  (* iApply wp_bind. *)
-  (* iApply (wp_mono with "Hwp"). *)
-  (* iIntros ([a | b]) "H /=". *)
-  (* - by iApply wp_think. *)
-  (* - by iApply wp_return. *)
-(* Qed. *)
+Lemma wp_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+   (e: expr V R) (Φ Ψ: R -> iProp Σ)
+   :wp SI e Φ -∗ (∀ v, Φ v -∗ Ψ v) -∗ wp SI e Ψ.
+Proof.
+  iIntros "Hwp H".
+  iApply (wp_strong_mono with "Hwp").
+  - iIntros (v) "Hphi". 
+    iModIntro.
+    iApply ("H" with "Hphi").
+Qed.
+
+Lemma wp_fmap {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) 
+  (f: R -> B) (Φ: B -> iProp Σ) (e: expr V R)
+  : wp SI e (Φ ∘ f ) -∗ wp SI (f <$> e) Φ. 
+Proof.
+  iIntros "Hwp".
+  iApply wp_bind.
+  iApply (wp_mono with "Hwp").
+  iIntros (x) "Hpost /=".
+  iApply (wp_return with "Hpost").
+Qed.
+
+Lemma wp_iter {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) (Φ: B -> iProp Σ)
+  (x: R)
+  (f: R -> expr V (R + B)):
+  wp SI (f x) (case_ (λ x, ▷ wp SI (iter f x) Φ) Φ) -∗
+  wp SI (iter f x) Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite iter_unfold.
+  iApply wp_bind.
+  iApply (wp_mono with "Hwp").
+  iIntros ([a | b]) "H /=".
+  - by iApply wp_think.
+  - by iApply wp_return.
+Qed.
+
+Lemma bupd_wp {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+ (e: expr V R) (Φ : R -> iProp Σ)
+ : (|==> wp SI e Φ) ⊢ wp SI e Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite wp_unfold.
+  unfold wp_pre.
+  destruct e.
+  - iMod "Hwp" as "Hwp".
+    by iMod "Hwp" as "Hwp".
+  - iMod "Hwp" as "Hwp".
+    by iMod "Hwp" as "Hwp".
+  - iMod "Hwp" as "Hwp".
+    by iMod "Hwp" as "Hwp".
+  - by iMod "Hwp" as "Hwp".
+Qed.
+
+Lemma wp_bupd {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+ (e: expr V R) (Φ : R -> iProp Σ) 
+ : wp SI e (λ v, |==> Φ v) ⊢ wp SI e Φ.
+Proof.
+  iIntros "Hwp".
+  iApply (wp_strong_mono with "Hwp").
+  auto.
+Qed.
 
 (* Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A)  *)
   (* (prog : state_delay (gmap nat nat) A) *)
@@ -192,6 +208,7 @@ Proof.
   apply (not_elem_of_dom (D := gset nat)).
   apply is_fresh.
 Qed.
+
 
 
 Section adequacy.
@@ -216,20 +233,45 @@ Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
 Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R ) :=
 Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
 *)
+
+(*
+  Ok what does this bugger say again?
+
+  We are stepping in e.
+  With two post conditions ψ is the post condition for the expression
+  we are stepping right now.
+  Φ is the post condition for the main thread, thus it is the one that matters
+  for the rest of the threadpool. Since forked threads discard it, it only applies
+  to the main thread.
+
+  Since this is the deepest level it seems we should use the soundness lemmas at this point.
+  Except no. We do not take in account that Φ and Ψ are pure. They are any iProp predicates.
+  Hence none of the soundness lemma's apply here.
+*)
 Lemma step_expr_adequacy {R A} (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
   (h: heap nat)
   (ts: list (thread nat R))
-  (e: expr nat A):
-  wp (state_interp γ) e Ψ -∗
-  state_interp γ h -∗
-  ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) ==∗ ▷
-  match runState (step_expr e) h ts with
-  | Here (e', h', ts') => wp (state_interp γ) e' Ψ ∗ state_interp γ h'
-                          ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
-  | ProgErr => False
-  | EvalErr => True
-  end.
+  (e: expr nat A)
+  : wp (state_interp γ) e Ψ 
+  -∗ state_interp γ h
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  ==∗ 
+   ▷ match runState (step_expr e) h ts with
+     | Here (e', h', ts') => wp (state_interp γ) e' Ψ ∗ state_interp γ h'
+                             ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+     | ProgErr => False
+     | EvalErr => True
+     end.
 Proof.
+  iIntros "Hwp Hsi Hbigop".
+  destruct e.
+  - simpl. iIntros "!> !>".
+    iFrame.
+  - simpl. iIntros "!> !>".
+    iFrame.
+  -
+  -
+
 Admitted.
 
 Lemma step_thread_adequacy {R} (Φ Ψ: R -> iProp Σ) 
