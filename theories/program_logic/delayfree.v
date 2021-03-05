@@ -119,5 +119,7 @@ Definition is_done {V R} (e: expr V R): option R :=
     | Vis e k  => None 
     end.
 
+Definition fresh_loc {V} (σ: gmap nat V): loc :=
+    fresh (dom (gset nat) σ).
 
 

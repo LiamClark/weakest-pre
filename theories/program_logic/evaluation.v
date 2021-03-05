@@ -156,8 +156,8 @@ Section heap_op.
 
   Definition alloc (v: V) : state V A nat :=
     modifyS'$ λ st, 
-                let fresh := fresh $ dom (gset nat) st
-                in (fresh, <[fresh := v]> st).
+                let l := fresh_loc st
+                in (l, <[l:= v]> st).
 
   Definition free (n: nat): state V A unit :=
     modifyS $ delete n.

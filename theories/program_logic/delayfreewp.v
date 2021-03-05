@@ -191,6 +191,16 @@ Proof.
   auto.
 Qed.
 
+Lemma wp_think' {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
+   (e: expr V R) (Φ: R -> iProp Σ): wp SI (Think e) Φ ==∗ ▷ wp SI e Φ .
+Proof.
+  iIntros "Hwp".
+  rewrite wp_unfold. 
+  unfold wp_pre.
+  iMod "Hwp". 
+  done.
+Qed.
+
 (* Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A)  *)
   (* (prog : state_delay (gmap nat nat) A) *)
   (* (st st': gmap nat nat) *)
@@ -202,28 +212,178 @@ Qed.
 Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
 
 Lemma fresh_none (σ: gmap nat nat): 
-  let l := fresh (dom (gset nat) σ)
-  in σ !! l = None.
+ σ !! fresh_loc σ = None.
 Proof.
   apply (not_elem_of_dom (D := gset nat)).
+  unfold fresh_loc.
   apply is_fresh.
 Qed.
+
+Section heap_wp.
+  Context `{! inG Σ (heapR natO)}.
+
+ (* Now come the rule that needs the points to connective in their weakest pre definition.
+     We therefore first define this in terms of the Authorative camera.
+   *)
+
+  Definition points_to (γ: gname) (n: nat) (v: nat): iProp Σ :=
+    own γ ( ◯ {[ n := Excl v ]}).
+
+  Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
+  Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
+  Context (γ: gname).
+
+  Lemma rewrite_lookups σ n v : lift_excl σ !! n ≡ Excl' v -> (σ !! n) = Some v.
+  Proof.
+    intros H.
+    rewrite (lookup_fmap Excl σ n) in H.
+    destruct (leibniz_equiv_iff (Excl <$> σ !! n) (Excl' v)).
+    apply H0 in H.
+    destruct (σ !! n) eqn: E.
+    - injection H. auto.
+    - done.
+  Qed.
+
+  Lemma si_points_to_agree σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
+  Proof.
+    iIntros "Hsi Hpt".
+    unfold state_interp. unfold points_to.
+    iDestruct (own_valid_2 with "Hsi Hpt") as "%".
+    pose (cmr := (gmapUR nat (exclR natO))).
+    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    destruct (a H) as [H1 H2].
+    iPureIntro.
+    pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
+    apply rewrite_lookups.
+    assumption.
+  Qed.
+
+  Lemma lift_excl_some σ n v: σ !! n = Some v -> lift_excl σ !! n = Some (Excl v).
+  Proof.
+    intro H.
+    rewrite lookup_fmap. rewrite H.
+    reflexivity.
+  Qed.
+
+  Lemma points_to_update σ n v w:
+    state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
+  Proof.
+    iIntros "Hsi Hpt".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as "%".
+    unfold state_interp. unfold points_to.
+    iApply own_op.
+    iApply (own_update_2 with "Hsi Hpt").
+    apply auth_update. unfold lift_excl.
+    rewrite fmap_insert.
+    eapply singleton_local_update.
+    * apply lift_excl_some. apply H.
+    * apply exclusive_local_update.
+      done.
+    Qed.
+
+  
+  Lemma si_alloc σ v:
+    let l := fresh_loc σ
+    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
+  Proof.
+    iIntros "Hsi".
+    iApply own_op.
+    iApply (own_update with "Hsi").
+    -  apply auth_update_alloc.
+       unfold lift_excl. rewrite fmap_insert. 
+       apply alloc_singleton_local_update.
+       + rewrite lookup_fmap. rewrite fresh_none. done.
+       + done. 
+  Qed.
+
+  Lemma si_free σ v l:
+   state_interp γ σ -∗ points_to γ l v ==∗ state_interp γ (delete l σ).
+  Proof.
+    iIntros "Hsi Hpt".
+    iApply (own_update).
+    - apply auth_update_dealloc.
+      unfold lift_excl. rewrite fmap_delete.
+      apply (delete_singleton_local_update _ l (Excl v)).
+    - iApply own_op.
+      iFrame.
+  Qed.
+
+  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (delayfree.get n) Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iIntros "!> !> !>". iExists σ, v. simpl.
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %H. 
+    iSplit; try done.
+    iFrame. 
+    iApply wp_return. by iApply "Hpost".
+  Qed.
+
+  Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
+    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ wp (state_interp γ) (delayfree.put n v') Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi". 
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
+    (* one update here*)
+    iMod (points_to_update with "Hsi Hpt") as "(Hsi & Hpt)". 
+    iIntros "!> !> !>". iExists (<[n := v']> σ), tt. simpl.
+    iSplit.
+    - iPureIntro. split.
+      + apply (mk_is_Some _ _ Hsome).
+      + done.
+    - iFrame. iApply wp_return.
+      by iApply "Hpost".
+  Qed. 
+
+  Lemma wp_alloc v (Ψ: nat -> iProp Σ):
+    (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) (delayfree.alloc v) Ψ.
+  Proof.
+    iIntros "Hpost". 
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iMod (si_alloc with "Hsi") as "(Hsi & Hpt)".
+    iIntros "!> !> !>". iExists (<[fresh_loc σ := v]> σ), (fresh_loc σ). simpl.
+    iSplit.
+    - iPureIntro. split.
+      + apply fresh_none.
+      + done.
+    - iFrame. iApply wp_return.
+      iApply ("Hpost" with "Hpt").
+  Qed.
+
+  Lemma wp_free v l (Ψ: unit -> iProp Σ):
+    points_to γ l v -∗ Ψ tt -∗ wp (state_interp γ) (delayfree.free l) Ψ.
+  Proof.
+    iIntros "Hpt Hpost". 
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
+    iMod (si_free with "Hsi Hpt") as "Hsi".
+    iIntros "!> !> !>". iExists (delete l σ), tt. simpl.
+    iSplit.
+    - iPureIntro. split.
+      + apply (mk_is_Some _ _ Hsome).
+      + done.
+    - iFrame. 
+      by iApply wp_return.
+  Qed.
+End heap_wp.
 
 
 
 Section adequacy.
-Context `{! inG Σ (heapR natO)}.
+ Context `{! inG Σ (heapR natO)}.
+ Context (γ: gname).
 
 (* Now come the rule that needs the points to connective in their weakest pre definition.
     We therefore first define this in terms of the Authorative camera.
   *)
 
- Definition points_to (γ: gname) (n: nat) (v: nat): iProp Σ :=
-   own γ ( ◯ {[ n := Excl v ]}).
 
- Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
- Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
- Context (γ: gname).
 
 (*
 
@@ -256,7 +416,7 @@ Lemma step_expr_adequacy {R A} (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ)
   -∗ state_interp γ h
   -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
   ==∗ 
-   ▷ match runState (step_expr e) h ts with
+   ▷ |==> match runState (step_expr e) h ts with
      | Here (e', h', ts') => wp (state_interp γ) e' Ψ ∗ state_interp γ h'
                              ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
      | ProgErr => False
@@ -265,12 +425,47 @@ Lemma step_expr_adequacy {R A} (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ)
 Proof.
   iIntros "Hwp Hsi Hbigop".
   destruct e.
-  - simpl. iIntros "!> !>".
+  - simpl. iIntros "!> !> !>".
     iFrame.
-  - simpl. iIntros "!> !>".
+  - simpl.
+    iMod (wp_think' with "Hwp") as "Hwp". iIntros "!> !> !>".
     iFrame.
   -
-  -
+   rewrite wp_unfold. unfold wp_pre.
+   simpl.
+   iMod "Hwp" as "(Hwpe2 & Hwpe1)".
+   iModIntro. iNext. iFrame.
+   by iApply big_sepL_nil.
+  - destruct e.
+    + simpl. 
+      rewrite wp_unfold. unfold wp_pre.
+      iEval (simpl) in "Hwp".
+      iMod ("Hwp" with "Hsi") as "Hwp".
+      iIntros "!> !>".
+      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
+      iModIntro.
+      destruct H as (Hlookup & Heq). rewrite Hlookup. simpl.
+      subst h. iFrame.
+    + simpl. 
+      rewrite wp_unfold. unfold wp_pre.
+      iEval (simpl) in "Hwp".
+      iMod ("Hwp" with "Hsi") as "Hwp".
+      iIntros "!> !>".
+      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
+      iModIntro.
+      destruct H as (Hlookup & Heq). subst σ'.
+      destruct v. iFrame.
+    + simpl.
+      rewrite wp_unfold. unfold wp_pre.
+      iEval (simpl) in "Hwp".
+      iMod ("Hwp" with "Hsi") as "Hwp".
+      iIntros "!> !>".
+      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
+      destruct H as (Hlookup & Heq). subst σ'. 
+      iModIntro.  iFrame. 
+      unfold wp. done.
+
+    + 
 
 Admitted.
 
