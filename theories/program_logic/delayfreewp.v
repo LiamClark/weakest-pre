@@ -436,60 +436,53 @@ Proof.
    iMod "Hwp" as "(Hwpe2 & Hwpe1)".
    iModIntro. iNext. iFrame.
    by iApply big_sepL_nil.
-
-  - destruct e.
-    + 
-     simpl. 
-     rewrite wp_unfold. unfold wp_pre.
-     iEval (simpl) in "Hwp".
-     iMod ("Hwp" with "Hsi") as "Hwp".
-     iIntros "!> !>".
-      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-      iModIntro.
-      destruct H as (Hlookup & Heq). rewrite Hlookup. simpl.
-      subst h. iFrame.
-    + simpl. 
-      rewrite wp_unfold. unfold wp_pre.
-      iEval (simpl) in "Hwp".
-      iMod ("Hwp" with "Hsi") as "Hwp".
-      iIntros "!> !>".
-      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-      iModIntro.
-      destruct H as (Hlookup & Heq). subst σ'.
-      destruct v. iFrame.
-    + simpl.
-      rewrite wp_unfold. unfold wp_pre.
-      iEval (simpl) in "Hwp".
-      iMod ("Hwp" with "Hsi") as "Hwp".
-      iIntros "!> !>".
-      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-      destruct H as (Hlookup & Heq). subst σ' v. 
+  -
+    rewrite wp_unfold. unfold wp_pre.
+    iMod ("Hwp" with "Hsi") as "Hwp".
+    iIntros "!> !>".
+    iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
+    destruct e; simpl.
+    + destruct H as (Hlookup & Heq). rewrite Hlookup. subst h.
+      iModIntro. iFrame.
+    + destruct H as (Hlookup & Heq). subst σ'. destruct v.
+      iModIntro. iFrame.
+    + destruct H as (Hlookup & Heq). subst σ' v. 
       iModIntro. iFrame. 
-    + simpl.
-      rewrite wp_unfold. unfold wp_pre.
-      iEval (simpl) in "Hwp".
-      iMod ("Hwp" with "Hsi") as "Hwp".
-      iIntros "!> !>".
-      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-      destruct H as (Hlookup & Heq). subst σ'. destruct v.
+    + destruct H as (Hlookup & Heq). subst σ'. destruct v.
       iModIntro. iFrame.
 Qed.
 
+(* 
+ ok next up second dude. What up here?
+ we still have two post conditions, but they operate on the same type now.
+ Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
+ Φ is still the post condition for the main thread.
+*)
 Lemma step_thread_adequacy {R} (Φ Ψ: R -> iProp Σ) 
   (h: heap nat)
   (ts: list (thread nat R))
-  (ct: thread nat R):
-  wp_thread (state_interp γ) ct Ψ -∗
-  state_interp γ h -∗
-  ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) ==∗ ▷
-  match runState (step_thread ct) h ts with
-  | Here (ct', h', ts') => wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
-                          ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
-  | ProgErr => False
-  | EvalErr => True
-  end.
+  (ct: thread nat R)
+  : wp_thread (state_interp γ) ct Ψ 
+  -∗ state_interp γ h 
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  ==∗ 
+  ▷ |==> 
+    match runState (step_thread ct) h ts with
+    | Here (ct', h', ts') => wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
+                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+    | ProgErr => False
+    | EvalErr => True
+    end.
 Proof.
-Admitted.
+  iIntros "Hwp Hsi Hbigop".
+  simpl.
+  destruct ct; simpl;
+  iMod (step_expr_adequacy with "Hwp Hsi Hbigop") as "Hexpr";
+  iIntros "!> !>"; iMod "Hexpr"; iModIntro;
+  simpl; destruct (runState (step_expr e) h ts); try done;
+  destruct a; destruct p; simpl; done.
+Qed.
+
 (*
 Definition step_expr {V R A} (e: expr V A): state V R (expr V A) :=
 Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
@@ -497,20 +490,56 @@ Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R
 Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
 *)
 
+(* OK third one up, now there is just one post condiiton left.
+    Φ for the main thread. All the other threads namely have the trivial
+    post condition
+*)
+ Lemma mod_lt (a b: nat): b ≠ 0 -> a mod b < b.
+Proof.
+  intros H.
+  unfold Nat.modulo.
+  destruct b.
+  Search not.
+  - assert (0 = 0). done.
+    unfold not in H. pose (H H0). done.
+  - 
+  simpl.
+Qed. 
+
+Lemma mod_lookup_some {A} (l: list A) (i: nat): is_Some (l !! (i mod (length l))).
+Proof.
+ apply lookup_lt_is_Some_2. 
+ apply Nat.mod_le.
+Qed.
+
 Lemma single_step_thread_adequacy {R} (Φ: R -> iProp Σ) 
   (h: heap nat)
   (s: scheduler nat R)
-  (ts: list (thread nat R)):
-  state_interp γ h -∗
-  ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) ==∗ ▷
-  match runState (single_step_thread s) h ts with
-  | Here (s', h', ts') => state_interp γ h'
-                          ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
-  | ProgErr => False
-  | EvalErr => True
-  end.
+  (ts: list (thread nat R))
+  : state_interp γ h 
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  ==∗ 
+  ▷ |==>
+    match runState (single_step_thread s) h ts with
+    | Here (s', h', ts') => state_interp γ h'
+                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+    | ProgErr => False
+    | EvalErr => True
+    end.
 Proof.
+  iIntros "HSi Hbigop".
+  (* I need a wp_thread  selected by s *)
+
+  (* lookup_lt_is_Some_2 *)
+  (* mod_lt *)
+  unfold single_step_thread. simpl. destruct (schedule s (ts, h)).
+  simpl. 
+  iDestruct (step_thread_adequacy) as "Hthread".
 Admitted.
+
+Locate "≠".
+Locate "mod".
+Search PeanoNat.Nat.modulo.
 
 Lemma eval_threaded_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   (h: heap nat)
