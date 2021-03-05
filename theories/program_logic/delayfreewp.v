@@ -10,7 +10,7 @@ Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop
 refine (match c with
         |GetE l  => λ v, σ !! l = Some v /\ σ' = σ 
         |PutE l v' => λ _, is_Some (σ !! l) /\ σ' = <[l := v']> σ
-        |AllocE v' => λ l, σ !! l = None /\ σ' = <[l := v']> σ
+        |AllocE v' => λ l, l = fresh_loc σ /\ σ' = <[l := v']> σ
         |FreeE l => λ _, is_Some (σ !! l) /\ σ' = delete l σ
         end
 ).
@@ -349,7 +349,7 @@ Section heap_wp.
     iIntros "!> !> !>". iExists (<[fresh_loc σ := v]> σ), (fresh_loc σ). simpl.
     iSplit.
     - iPureIntro. split.
-      + apply fresh_none.
+      + done.
       + done.
     - iFrame. iApply wp_return.
       iApply ("Hpost" with "Hpt").
@@ -436,12 +436,14 @@ Proof.
    iMod "Hwp" as "(Hwpe2 & Hwpe1)".
    iModIntro. iNext. iFrame.
    by iApply big_sepL_nil.
+
   - destruct e.
-    + simpl. 
-      rewrite wp_unfold. unfold wp_pre.
-      iEval (simpl) in "Hwp".
-      iMod ("Hwp" with "Hsi") as "Hwp".
-      iIntros "!> !>".
+    + 
+     simpl. 
+     rewrite wp_unfold. unfold wp_pre.
+     iEval (simpl) in "Hwp".
+     iMod ("Hwp" with "Hsi") as "Hwp".
+     iIntros "!> !>".
       iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
       iModIntro.
       destruct H as (Hlookup & Heq). rewrite Hlookup. simpl.
@@ -461,13 +463,17 @@ Proof.
       iMod ("Hwp" with "Hsi") as "Hwp".
       iIntros "!> !>".
       iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-      destruct H as (Hlookup & Heq). subst σ'. 
-      iModIntro.  iFrame. 
-      unfold wp. done.
-
-    + 
-
-Admitted.
+      destruct H as (Hlookup & Heq). subst σ' v. 
+      iModIntro. iFrame. 
+    + simpl.
+      rewrite wp_unfold. unfold wp_pre.
+      iEval (simpl) in "Hwp".
+      iMod ("Hwp" with "Hsi") as "Hwp".
+      iIntros "!> !>".
+      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
+      destruct H as (Hlookup & Heq). subst σ'. destruct v.
+      iModIntro. iFrame.
+Qed.
 
 Lemma step_thread_adequacy {R} (Φ Ψ: R -> iProp Σ) 
   (h: heap nat)
