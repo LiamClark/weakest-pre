@@ -417,46 +417,50 @@ Lemma step_expr_adequacy {R A} (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ)
   (e: expr nat A)
   : wp (state_interp γ) e Ψ 
   -∗ state_interp γ h
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
   ==∗ 
    ▷ |==> match runState (step_expr e) h ts with
-     | Here (e', h', ts') => 
-     ⌜length ts ≤ length ts'⌝ ∗  
-     wp (state_interp γ) e' Ψ ∗ state_interp γ h'
-                             ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+     | Here (e', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝ 
+                             ∗ wp (state_interp γ) e' Ψ ∗ state_interp γ h'
+                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
      | ProgErr => False
      | EvalErr => True
      end.
 Proof.
-  iIntros "Hwp Hsi Hbigop".
-  destruct e.
-  - simpl. iIntros "!> !> !>".
-    by iFrame. 
-  - simpl.
+  iIntros "Hwp Hsi".
+  destruct e; simpl.
+  - iIntros "!> !> !>".
+    iExists []. rewrite right_id_L.
+    iFrame. auto.
+  - 
     iMod (wp_think' with "Hwp") as "Hwp". iIntros "!> !> !>".
-    by iFrame.
+    iExists []. rewrite right_id_L.
+    iFrame. auto.
   -
    rewrite wp_unfold. unfold wp_pre.
    simpl.
    iMod "Hwp" as "(Hwpe2 & Hwpe1)".
    iModIntro. iNext. iFrame. simpl.
-   iModIntro. iSplit; last done.
-   iPureIntro. rewrite app_length. simpl.
-   lia.
+   iModIntro. 
+   iExists [_].
+   iSplit; first done. by iFrame.
   -
     rewrite wp_unfold. unfold wp_pre.
     iMod ("Hwp" with "Hsi") as "Hwp".
     iIntros "!> !>".
     iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
     destruct e; simpl.
-    + destruct H as (Hlookup & Heq). rewrite Hlookup. subst h.
-      iModIntro. by iFrame.
+    + destruct H as (Hlookup & Heq). rewrite Hlookup. subst h. simpl.
+      iExists []. rewrite right_id_L.
+      iFrame. auto.
     + destruct H as (Hlookup & Heq). subst σ'. destruct v.
-      iModIntro. by iFrame.
+      iExists []. rewrite right_id_L.
+      iFrame. auto.
     + destruct H as (Hlookup & Heq). subst σ' v. 
-      iModIntro. by iFrame. 
+      iExists []. rewrite right_id_L.
+      iFrame. auto.
     + destruct H as (Hlookup & Heq). subst σ'. destruct v.
-      iModIntro. by iFrame.
+      iExists []. rewrite right_id_L.
+      iFrame. auto.
 Qed.
 
 (* 
@@ -471,58 +475,31 @@ Lemma step_thread_adequacy {R} (Φ Ψ: R -> iProp Σ)
   (ct: thread nat R)
   : wp_thread (state_interp γ) ct Ψ 
   -∗ state_interp γ h 
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
   ==∗ 
   ▷ |==> 
     match runState (step_thread ct) h ts with
-    | Here (ct', h', ts') => ⌜length ts <= length ts'⌝ 
+    | Here (ct', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝
                             ∗ wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+                            ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
     | ProgErr => False
     | EvalErr => True
     end.
 Proof.
-  iIntros "Hwp Hsi Hbigop".
+  iIntros "Hwp Hsi".
   simpl.
   destruct ct; simpl.
   - 
-    iMod (step_expr_adequacy with "Hwp Hsi Hbigop") as "Hexpr".
+    iMod (step_expr_adequacy _ _ _ ts  with "Hwp Hsi") as "Hexpr".
     iIntros "!> !>". iMod "Hexpr". iModIntro.
     simpl. 
     by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | ? | baz].
   -
-    iMod (step_expr_adequacy with "Hwp Hsi Hbigop") as "Hexpr".
+    iMod (step_expr_adequacy _ _ _ ts with "Hwp Hsi") as "Hexpr".
     iIntros "!> !>". iMod "Hexpr". iModIntro.
     simpl. 
     by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | ? | ?].
 Qed.
 
-(*
-Definition step_expr {V R A} (e: expr V A): state V R (expr V A) :=
-Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
-Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R ) :=
-Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
-*)
-
-Locate "-".
-Search lt.
-Search Nat.sub.
-(* Lemma mod_lt (a b: nat): b ≠ 0 -> a mod b < b.
-Proof.
-  intros H.
-  unfold Nat.modulo.
-  destruct b.
-  - assert (0 = 0). done.
-    unfold not in H. pose (H H0). done.
-  - assert (b < S b).
-    + unfold lt. done.
-    + apply Nat.lt_trans with (m := b).
-    * apply Nat.le_sub_l.
-    *
-
-  simpl.
-Qed.  *)
-Search modulo lt.
 Lemma mod_lookup_some {A} (l: list A) (i: nat):
  l ≠ [] -> is_Some (l !! (i mod (length l))).
 Proof.
@@ -540,8 +517,7 @@ Lemma scheduled_adequacy {R} (Φ: R -> iProp Σ)
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
-  : 
-  ts ≠ [] -> 
+  : ts ≠ [] -> 
   state_interp γ h 
   -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
   ==∗ 
@@ -555,36 +531,51 @@ Lemma scheduled_adequacy {R} (Φ: R -> iProp Σ)
     end.
 Proof.
   iIntros (Hnil) "HSi Hbigop".
-  (* I need a wp_thread  selected by s *)
-
-  (* lookup_lt_is_Some_2 *)
-  (* mod_lt *)
   unfold single_step_thread. simpl. destruct (schedule s (ts, h)) as [i s'].
-  simpl. destruct (mod_lookup_some ts i Hnil) as [t Hsome].
-  iPoseProof (step_thread_adequacy with "" ) as "H".
-
+  simpl. 
+  destruct (mod_lookup_some ts i Hnil) as [t Hsome].
+  iDestruct (big_sepL_insert_acc with "Hbigop") as "(Hwpct & Hrestore)"; first done.
+  iMod (step_thread_adequacy _ _ _ ts with "Hwpct HSi" ) as "H".
+  iIntros "!> !>".
+  iMod "H". iModIntro.
   rewrite Hsome /=.  
-  iDestruct (step_thread_adequacy) as "Hthread".
-Admitted.
-
-Locate "≠".
-Locate "mod".
-Search PeanoNat.Nat.modulo.
+  destruct (runState _ h ts) as [[[t' σ'] ts'] | ? | baz]; try done; simpl.
+  iDestruct "H" as (ts'' ->) "(Hwpt' & $ & Hbigop)".
+  iSplit. 
+  - iPureIntro. rewrite insert_length app_length. lia. 
+  - rewrite insert_app_l; last first. 
+    { apply Nat.mod_upper_bound. destruct ts; done. }
+   iFrame.
+   by iApply "Hrestore".
+Qed.
 
 Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   (h: heap nat)
   (s: scheduler nat R)
-  (ts: list (thread nat R)):
-  state_interp γ h -∗
-  ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) -∗ 
-  Nat.iter n (λ P : iPropI Σ, |==> ▷ P) $ |==>
+  (ts: list (thread nat R))
+  : ts ≠ [] -> 
+  state_interp γ h
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ P) $ |==>
   match runState (eval_threaded n s) h ts with
-  | Here (x, h', ts') => Φ x ∗ state_interp γ h'
+  | Here (x, h', ts') => ⌜length ts <= length ts'⌝ ∗ Φ x ∗ state_interp γ h'
                           ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
   | ProgErr => False
   | EvalErr => True
   end.
 Proof.
+  iIntros (Hnil) "Hsi Hbigop".
+  iInduction n as [|n'] "IH" forall (s).
+  - done.
+  - iPoseProof (scheduled_adequacy with "Hsi Hbigop" ) as "H"; try done.
+    iEval (unfold eval_threaded).
+    rewrite run_bind_dist.
+    (* destruct (runState _  h ts) as [[[s' σ'] ts'] | ? | ?]; try done. *)
+    destruct (runState (single_step_thread s)  h ts) as [[[s' σ'] ts'] | ? | ?]; try done.
+    rewrite run_bind_dist. 
+    simpl runState at 3. (* a less fragile way to do this?*)
+    iEval (cbn). iEval (fold (eval_threaded (V := nat) (R := R))).
+    +
 Admitted.
 
 

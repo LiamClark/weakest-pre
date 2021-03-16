@@ -95,6 +95,18 @@ Instance mbind_state {V A}: MBind (state V A) :=
         λ h threads,
            '(x, h', threads) ← (runState ma) h threads ;
             runState (f x) h' threads.
+
+Lemma run_bind_dist {V A B C} h ts
+  (m: state V A B) (f: B -> state V A C):
+  runState (m ≫= f) h ts =  match runState m h ts with
+                             | Here (x, h', ts') => runState (f x) h' ts'
+                             | ProgErr => ProgErr
+                             | EvalErr => EvalErr
+                             end.
+Proof.
+  unfold mbind. unfold mbind_state.
+  done.
+Qed.
            
 Definition lift_error {V A B} (x: error B): state V A B :=
   State $ λ h ts, 
