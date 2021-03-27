@@ -92,3 +92,12 @@ Proof.
   - done.
   - iModIntro. iNext. done.
 Qed.
+
+Lemma nlaters' {Σ} (n: nat) (Q: iProp Σ):
+ Q ⊢ Nat.iter n (λ P : iPropI Σ, |==> ▷ |==> P) Q.
+Proof.
+  iIntros "Q".
+  induction n.
+  - done.
+  - iModIntro. iNext. iModIntro. done.
+Qed.

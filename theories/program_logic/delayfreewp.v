@@ -595,6 +595,10 @@ Lemma check_main_foo {A V: Type} (ts: list (thread V A)) (r: A)
   the first entry in ts' is a Main.
   That that thread is a Here.
   Then get the post condition out.
+
+  The modalities seem to misallign here, it looks like
+  it should be iterating |==> ▷ |==>?
+  is that legal?
 *)
 Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   (h: heap nat)
@@ -603,7 +607,7 @@ Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   : ts ≠ [] -> 
   state_interp γ h
   -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
-  -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ P) $ |==>
+  -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ |==> P) 
       match runState (eval_threaded n s) h ts with
       | Here (x, h', ts') => Φ x 
       | ProgErr => False
@@ -623,26 +627,22 @@ Proof.
       destruct (check_main ts') eqn: E. 
       * iSimpl. 
         iMod "H". iIntros "!> !>". 
-        iApply nlaters. iMod "H". 
+        iApply nlaters'. iMod "H". 
         apply check_main_foo in E.
         destruct E as [ts'' E]. rewrite E. simpl.
         iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
-        rewrite wp_unfold /=.
-        iMod "Hwp". iModIntro.
-        done.
+        rewrite wp_unfold /=. done.
       * iSimpl.
         iMod "H". iIntros "!> !>".
-        iApply nlaters.
-        iMod "H".
+        iMod "H". iModIntro.
         iDestruct "H" as "(% & Hsi' & Hbigop)".
         pose (Hnil' := non_nil_bigger_than  Hnil H).
-        iPoseProof ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop") as "IH''".
-        (* The modalities seem to misallign here, it looks like
-            it should be iterating |==> ▷ |==>?
-          *)
-        iDestruct ("IH" $! with "Hsi' Hbigop") as "IH'".
-    +
-Admitted.
+        iApply ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop").
+    + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
+      iApply nlaters'. done.
+    + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
+      iApply nlaters'. done.
+Qed.
 
 
 Lemma adequacy {R} (φ: R -> Prop) (n: nat) 
