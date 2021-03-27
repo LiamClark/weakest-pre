@@ -231,9 +231,6 @@ Proof.
   by trans P.
 Qed.
 
-(* proving this with exists seems impossible due to when the program
-   is a Think we can't get to a value
-*)
 Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
     (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
     eval_delay n prog = Some x -> φ x.

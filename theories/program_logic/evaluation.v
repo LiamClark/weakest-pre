@@ -232,7 +232,8 @@ CoFixpoint stream_scheduler {V R} (s: stream nat): scheduler V R :=
   Scheduler $ λ '(ts, h),
     let '(scons x xs) := s in (x, stream_scheduler xs).
 
-Fixpoint check_main {V R} (ts: list (thread V R)): option R :=
+  (* Main thread is always at position one*)
+Definition check_main {V R} (ts: list (thread V R)): option R :=
          match ts with
          | [] => None
          | t :: ts' => is_main t ≫= is_done

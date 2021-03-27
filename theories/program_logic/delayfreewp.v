@@ -549,6 +549,23 @@ Proof.
    by iApply "Hrestore".
 Qed.
 
+Arguments mbind_state : simpl never.
+Arguments mbind : simpl never.
+
+Lemma run_get_threads {V A} σ (ts: list (thread V A))
+  : runState get_threads σ ts = Here (ts, σ, ts).
+Proof.
+  done.
+Qed.
+
+(* 
+  Get the iterated update lemma's into their own file,
+  iApply nlaters to introduce them
+  Then use the eqn from check_main to prove that:
+  the first entry in ts' is a Main.
+  That that thread is a Here.
+  Then get the post condition out.
+*)
 Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   (h: heap nat)
   (s: scheduler nat R)
@@ -558,8 +575,7 @@ Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
   -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ P) $ |==>
   match runState (eval_threaded n s) h ts with
-  | Here (x, h', ts') => ⌜length ts <= length ts'⌝ ∗ Φ x ∗ state_interp γ h'
-                          ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+  | Here (x, h', ts') => Φ x 
   | ProgErr => False
   | EvalErr => True
   end.
@@ -567,14 +583,17 @@ Proof.
   iIntros (Hnil) "Hsi Hbigop".
   iInduction n as [|n'] "IH" forall (s).
   - done.
-  - iPoseProof (scheduled_adequacy with "Hsi Hbigop" ) as "H"; try done.
-    iEval (unfold eval_threaded).
+  - iPoseProof (scheduled_adequacy _ _ s  with "Hsi Hbigop" ) as "H"; try done.
+    iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
     rewrite run_bind_dist.
-    (* destruct (runState _  h ts) as [[[s' σ'] ts'] | ? | ?]; try done. *)
-    destruct (runState (single_step_thread s)  h ts) as [[[s' σ'] ts'] | ? | ?]; try done.
-    rewrite run_bind_dist. 
-    simpl runState at 3. (* a less fragile way to do this?*)
-    iEval (cbn). iEval (fold (eval_threaded (V := nat) (R := R))).
+    destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | ? | ?]; try done.
+    +
+      rewrite run_bind_dist. 
+      rewrite run_get_threads.
+      destruct (check_main ts') eqn: E. 
+      * iSimpl. iIntros "!> !>".
+        unfold check_main in E.
+      *
     +
 Admitted.
 
