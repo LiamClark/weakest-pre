@@ -101,3 +101,30 @@ Proof.
   - done.
   - iModIntro. iNext. iModIntro. done.
 Qed.
+
+Lemma step_bupdN_plain' {M} n (φ: Prop): 
+  (⊢@{uPredI M}(Nat.iter n (λ P, |==> ▷ |==> P) ⌜φ⌝) ==∗ ▷^n ◇ ⌜φ⌝).
+Proof.
+  induction n as [|n IH]; iIntros "H".
+  - by rewrite -bupd_intro -except_0_intro.
+  - rewrite Nat_iter_S. rewrite step_bupd_bupd.
+    iDestruct (IH with "H") as "H'".
+    rewrite !bupd_trans. 
+    by iDestruct (bupd_step_bupd with "H'") as "H''".
+Qed.
+
+Lemma later_bupdN_soundness' {M} (n: nat) (φ: Prop):
+  (⊢@{uPredI M} Nat.iter n (λ P, |==> ▷ |==> P) (⌜φ⌝)) -> φ.
+Proof.
+  intro H.
+  apply (@uPred.soundness M _ (S n)).
+  iPoseProof (H) as "H'".
+  induction n. 
+  - done.
+  - 
+    iDestruct (step_bupdN_plain' with "H'") as "H''".
+    iApply bupd_plain.
+    iMod "H''" as "H''". iModIntro. iNext.
+    rewrite -later_laterN laterN_later.
+    iNext. by iMod "H''". 
+Qed.
