@@ -2,7 +2,7 @@ From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
-From shiris.program_logic Require Import delayfree evaluation.
+From shiris.program_logic Require Import modal delayfree evaluation.
 Set Default Proof Using "Type".
 
 (* Curry the value R so it can be changed by the dependent pattern match on c *)
@@ -550,7 +550,6 @@ Proof.
 Qed.
 
 Arguments mbind_state : simpl never.
-Arguments mbind : simpl never.
 
 Lemma run_get_threads {V A} σ (ts: list (thread V A))
   : runState get_threads σ ts = Here (ts, σ, ts).
@@ -558,6 +557,24 @@ Proof.
   done.
 Qed.
 
+(*
+  I need the conclusion to say something abuot how ts can be split up
+*)
+Lemma check_main_foo {A V: Type} (ts: list (thread V A)) (r: A)
+  : check_main ts = Some r -> ∃ts', ts = (Main $ Answer r) :: ts'.
+  Proof.
+    intro H.
+    destruct ts as [|t ts'].
+    - done.
+    - exists ts'. simpl in *.
+      destruct t.
+      + simpl in *.
+        destruct e; try done.
+        simpl in *.
+        injection H. intro Heq.
+        subst r. done.
+      + done.
+  Qed.
 (* 
   Get the iterated update lemma's into their own file,
   iApply nlaters to introduce them
@@ -591,8 +608,15 @@ Proof.
       rewrite run_bind_dist. 
       rewrite run_get_threads.
       destruct (check_main ts') eqn: E. 
-      * iSimpl. iIntros "!> !>".
-        unfold check_main in E.
+      * iSimpl. 
+        iMod "H". iIntros "!> !>". 
+        iApply nlaters. iMod "H". 
+        apply check_main_foo in E.
+        destruct E as [ts'' E]. rewrite E. simpl.
+        iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
+        rewrite wp_unfold /=.
+        iMod "Hwp". iModIntro.
+        done.
       *
     +
 Admitted.
