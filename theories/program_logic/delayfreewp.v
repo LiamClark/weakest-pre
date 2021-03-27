@@ -557,6 +557,19 @@ Proof.
   done.
 Qed.
 
+Lemma non_nil_bigger_than {A} {ts ts' : list A}
+  : ts ≠ [] -> length ts ≤ length ts' -> ts' ≠ [].
+Proof.
+  intros Hnil Hlength.
+  destruct ts'.
+  -  destruct ts.
+    + done.
+    + simpl in *.
+    pose (Nat.nle_succ_0 _ Hlength). 
+    contradiction.
+  - done. 
+Qed.
+
 (*
   I need the conclusion to say something abuot how ts can be split up
 *)
@@ -591,14 +604,14 @@ Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
   state_interp γ h
   -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
   -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ P) $ |==>
-  match runState (eval_threaded n s) h ts with
-  | Here (x, h', ts') => Φ x 
-  | ProgErr => False
-  | EvalErr => True
-  end.
+      match runState (eval_threaded n s) h ts with
+      | Here (x, h', ts') => Φ x 
+      | ProgErr => False
+      | EvalErr => True
+      end.
 Proof.
+  iInduction n as [|n'] "IH" forall (s h ts);
   iIntros (Hnil) "Hsi Hbigop".
-  iInduction n as [|n'] "IH" forall (s).
   - done.
   - iPoseProof (scheduled_adequacy _ _ s  with "Hsi Hbigop" ) as "H"; try done.
     iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
@@ -617,7 +630,17 @@ Proof.
         rewrite wp_unfold /=.
         iMod "Hwp". iModIntro.
         done.
-      *
+      * iSimpl.
+        iMod "H". iIntros "!> !>".
+        iApply nlaters.
+        iMod "H".
+        iDestruct "H" as "(% & Hsi' & Hbigop)".
+        pose (Hnil' := non_nil_bigger_than  Hnil H).
+        iPoseProof ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop") as "IH''".
+        (* The modalities seem to misallign here, it looks like
+            it should be iterating |==> ▷ |==>?
+          *)
+        iDestruct ("IH" $! with "Hsi' Hbigop") as "IH'".
     +
 Admitted.
 
