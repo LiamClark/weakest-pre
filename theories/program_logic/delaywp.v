@@ -49,7 +49,7 @@ Proof.
   apply (fixpoint_unfold wp_delay_pre).
 Qed.
 
-Lemma wp_delay_return {Σ A}(x: A) (Φ: A -> iProp Σ): Φ x -∗ wp_delay (Answer x) Φ.
+Lemma wp_delay_return {Σ A} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp_delay (Answer x) Φ.
 Proof.
    rewrite wp_delay_unfold.
    iIntros "H".
@@ -135,11 +135,6 @@ Proof.
   auto.
 Qed.
 
-Check uPred.later_soundness.
-Locate uPred.later_soundness.
-Check step_fupdN_soundness.
-
-
 From iris.bi Require Import derived_laws_later plainly.
 Import derived_laws_later.bi.
 
@@ -178,7 +173,6 @@ Proof.
   by iApply bupd_plain.
 Qed.
 
-Check bupd_trans.
 Lemma step_bupdN_plain {M} n (φ: Prop): 
   (⊢@{uPredI M}(Nat.iter n (λ P, |==> ▷ P) ⌜φ⌝) ==∗ ▷^n ◇ ⌜φ⌝).
 Proof.
@@ -237,9 +231,6 @@ Proof.
   by trans P.
 Qed.
 
-(* proving this with exists seems impossible due to when the program
-   is a Think we can't get to a value
-*)
 Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
     (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
     eval_delay n prog = Some x -> φ x.
@@ -324,8 +315,6 @@ Proof.
   by iIntros ([[st x]| ]) "H !> /=".
 Qed.
 
-Locate "|==>".
-Print bupd.
 Lemma wp_bind {Σ A B ST} {SI: ST -> iProp Σ}
   (f: A -> state_delay ST B)
   (Φ: B -> iProp Σ)
