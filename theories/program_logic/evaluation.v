@@ -1,5 +1,5 @@
 From stdpp Require Import base gmap list streams.
-From shiris.program_logic Require Import delayfree.
+From shiris.program_logic Require Import itree.
 
 (* Ask casper how to credit his blog post*)
 
@@ -176,9 +176,8 @@ Section heap_op.
 End heap_op.
 
 
-Definition step_vis {V R T A}
- (c: envE V T)
- : (T -> expr V A) -> state V R (expr V A) :=
+Definition step_vis {V R T A} (c: envE V T):
+ (T -> expr V A) -> state V R (expr V A) := 
     match c with
     |GetE l   => λ k, k <$> (get l)
     |PutE l v => λ k, k <$> (put l v)
@@ -268,22 +267,22 @@ refine (fst ∘ fst <$> runState (eval_threaded n s) ∅ [Main e]).
 Defined.
 
 Definition incr (l: loc): expr nat nat. 
-refine(delayfree.get l ≫= λ n, delayfree.put l (S n) ;; mret n).
+refine(itree.get l ≫= λ n, itree.put l (S n) ;; mret n).
 Defined.
 
 Definition decr (l: loc): expr nat nat. 
-refine(delayfree.get l ≫= λ n, delayfree.put l (n - 1) ;; mret n).
+refine(itree.get l ≫= λ n, itree.put l (n - 1) ;; mret n).
 Defined.
 
 Definition prog: expr nat nat.
 refine (
-  l ← delayfree.alloc 5;
+  l ← itree.alloc 5;
   Fork
     (* side thread *)
     (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt)
     (* (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt) *)
   (* main thread *)
-  (decr l ;; decr l ;; delayfree.get l)
+  (decr l ;; decr l ;; itree.get l)
   ).
   exact nat.
 Defined.

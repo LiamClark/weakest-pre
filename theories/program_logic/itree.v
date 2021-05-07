@@ -1,4 +1,3 @@
-
 From stdpp Require Import list base gmap fin_sets fin_map_dom.
 From shiris.program_logic Require Import state.
 From iris.algebra Require Import auth gmap excl.
@@ -9,11 +8,7 @@ Require Import Unicode.Utf8.
 (*
 This is the type algebra normalized form of:
 ∀ S, iTree (stateE S).
-
-Do I need partiality on the get and put signatures? or can that be handled
-completely at the semantic level?
 *)
-
 CoInductive itree (E: Type -> Type) (R: Type): Type :=
 | Answer (r: R) (* computation terminating with value r *)
 | Think (t: itree E R) (* "silent" tau transition with child t *)
@@ -28,11 +23,13 @@ Arguments Vis {_ _ _}.
 
 Definition loc := nat.
 
-Variant envE (V : Type) :Type -> Type :=
+Variant envE (V : Type): Type -> Type :=
 |GetE:   loc -> envE V V
 |PutE:   loc -> V -> envE V ()
 |AllocE: V -> envE V loc 
 |FreeE:  loc -> envE V ().
+(* Specify in the interpreter that we require the comparison *)
+(* |CmpSwpE: loc -> V -> V -> envE V (V * bool) *)
 
 
 Arguments GetE {_}.
@@ -40,6 +37,7 @@ Arguments PutE {_}.
 Arguments AllocE {_}.
 Arguments FreeE {_}.
 
+(* Definition expr (V: Type) {cmp: EqDecision V} := itree (envE V).  *)
 Definition expr (V: Type) := itree (envE V). 
 
 Definition get {V} (l: loc): expr V V := Vis (GetE l) Answer.
@@ -80,14 +78,13 @@ Definition case_ {A B C}  (f: A -> C) (g: B -> C)
 CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
     pipe f (case_ (Think ∘ iter f) Answer). 
 
-Definition expr_frob {V R} (e: expr V R): expr V R.
-refine ( match e with
-          |Answer x => Answer x
-          |Think e' => Think e'
-          |Fork e1 e2 => Fork e1 e2
-          |Vis c k => Vis c k
-end).
-Defined.
+Definition expr_frob {V R} (e: expr V R): expr V R :=
+  match e with
+  | Answer x => Answer x
+  | Think e' => Think e'
+  | Fork e1 e2 => Fork e1 e2
+  | Vis c k => Vis c k
+  end.
 
 Lemma expr_frob_eq {V R} (e: expr V R): expr_frob e = e.
 Proof.

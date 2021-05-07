@@ -1,6 +1,7 @@
 From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
+From iris.base_logic Require Import derived.
 From iris.base_logic.lib Require Export fancy_updates.
 From iris.bi Require Import derived_laws_later plainly.
 Import derived_laws_later.bi.
@@ -124,7 +125,32 @@ Proof.
   - 
     iDestruct (step_bupdN_plain' with "H'") as "H''".
     iApply bupd_plain.
-    iMod "H''" as "H''". iModIntro. iNext.
+    iMod "H''". iModIntro. iNext.
     rewrite -later_laterN laterN_later.
     iNext. by iMod "H''". 
+Qed.
+
+Lemma later_bupdN_soundness'' {M} (n: nat) (φ: Prop):
+  (⊢@{uPredI M} |==> Nat.iter n (λ P, |==> ▷ |==> P) (⌜φ⌝)) -> φ.
+Proof.
+  intro H.
+  apply (@uPred.soundness M _ (S n)).
+  iPoseProof (H) as "H'".
+  induction n. 
+  - simpl. iNext. 
+    iApply bupd_plain. 
+    done.
+  - 
+    iDestruct (step_bupdN_plain' with "H'") as "H''".
+    iApply bupd_plain.
+    iMod "H''". iMod "H''". iModIntro. iNext.
+    rewrite -later_laterN laterN_later.
+    iNext. by iMod "H''". 
+Qed.
+
+Lemma lift_entails {Σ} (P Q: iProp Σ): (P ⊢ Q) -> ((⊢ P) -> (⊢ Q)).
+Proof.
+  unfold bi_emp_valid.
+  intros H H2.
+  by trans P.
 Qed.

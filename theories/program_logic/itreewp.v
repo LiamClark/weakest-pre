@@ -2,19 +2,17 @@ From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
-From shiris.program_logic Require Import modal delayfree evaluation.
+From shiris.program_logic Require Import modal itree evaluation.
 Set Default Proof Using "Type".
 
 (* Curry the value R so it can be changed by the dependent pattern match on c *)
-Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop.
-refine (match c with
-        |GetE l  => λ v, σ !! l = Some v /\ σ' = σ 
-        |PutE l v' => λ _, is_Some (σ !! l) /\ σ' = <[l := v']> σ
-        |AllocE v' => λ l, l = fresh_loc σ /\ σ' = <[l := v']> σ
-        |FreeE l => λ _, is_Some (σ !! l) /\ σ' = delete l σ
-        end
-).
-Defined.
+Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop :=
+  match c with
+  | GetE l    => λ v, σ !! l = Some v /\ σ' = σ 
+  | PutE l v' => λ _, is_Some (σ !! l) /\ σ' = <[l := v']> σ
+  | AllocE v' => λ l, l = fresh_loc σ /\ σ' = <[l := v']> σ
+  | FreeE l   => λ _, is_Some (σ !! l) /\ σ' = delete l σ
+  end.
 
 Definition wp_pre {Σ} {V} (SI: gmap loc V -> iProp Σ)
      (go: discrete_funO (λ R, expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
@@ -61,7 +59,6 @@ Proof.
   apply (fixpoint_unfold (wp_pre SI)).
 Qed.
 
-
 Lemma wp_return {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ)
    (x: R) (Φ: R -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
 Proof.
@@ -77,8 +74,6 @@ Proof.
   unfold wp_pre. iModIntro.
   done.
 Qed.
-
-
 
 Lemma wp_bind {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ)
   (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R): 
@@ -204,13 +199,6 @@ Proof.
   done.
 Qed.
 
-(* Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A)  *)
-  (* (prog : state_delay (gmap nat nat) A) *)
-  (* (st st': gmap nat nat) *)
-  (* : (∀γ, ⊢ wp (state_interp γ) prog (λ x, ⌜φ x⌝)) -> *)
-  (* eval_state_delay' n prog st = Some (st', x) -> *)
-  (* φ x.  *)
-(* maak thread indexing een progerr zodat adequacy dat uitsluit *)
 (*Heap rules *)
 Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
 
@@ -312,7 +300,7 @@ Section heap_wp.
   Qed.
 
   Lemma wp_get n v (Ψ: nat -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (delayfree.get n) Ψ.
+    points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (itree.get n) Ψ.
   Proof.
     iIntros "Hpt Hpost".
     rewrite wp_unfold. unfold wp_pre.
@@ -325,7 +313,7 @@ Section heap_wp.
   Qed.
 
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
-    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ wp (state_interp γ) (delayfree.put n v') Ψ.
+    points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ wp (state_interp γ) (itree.put n v') Ψ.
   Proof.
     iIntros "Hpt Hpost".
     rewrite wp_unfold. unfold wp_pre.
@@ -343,7 +331,7 @@ Section heap_wp.
   Qed. 
 
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
-    (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) (delayfree.alloc v) Ψ.
+    (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) (itree.alloc v) Ψ.
   Proof.
     iIntros "Hpost". 
     rewrite wp_unfold. unfold wp_pre.
@@ -359,7 +347,7 @@ Section heap_wp.
   Qed.
 
   Lemma wp_free v l (Ψ: unit -> iProp Σ):
-    points_to γ l v -∗ Ψ tt -∗ wp (state_interp γ) (delayfree.free l) Ψ.
+    points_to γ l v -∗ Ψ tt -∗ wp (state_interp γ) (itree.free l) Ψ.
   Proof.
     iIntros "Hpt Hpost". 
     rewrite wp_unfold. unfold wp_pre.
@@ -380,22 +368,6 @@ End heap_wp.
 
 Section adequacy.
  Context `{! inG Σ (heapR natO)}.
- Context (γ: gname).
-
-(* Now come the rule that needs the points to connective in their weakest pre definition.
-    We therefore first define this in terms of the Authorative camera.
-  *)
-
-
-
-(*
-
-
-Definition step_expr {V R A} (e: expr V A): state V R (expr V A) :=
-Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
-Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R ) :=
-Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
-*)
 
 (*
   Ok what does this bugger say again?
@@ -411,7 +383,7 @@ Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R 
   Except no. We do not take in account that Φ and Ψ are pure. They are any iProp predicates.
   Hence none of the soundness lemma's apply here.
 *)
-Lemma step_expr_adequacy {R A} (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
+Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
   (h: heap nat)
   (ts: list (thread nat R))
   (e: expr nat A)
@@ -469,7 +441,7 @@ Qed.
  Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
  Φ is still the post condition for the main thread.
 *)
-Lemma step_thread_adequacy {R} (Φ Ψ: R -> iProp Σ) 
+Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ) 
   (h: heap nat)
   (ts: list (thread nat R))
   (ct: thread nat R)
@@ -489,15 +461,15 @@ Proof.
   simpl.
   destruct ct; simpl.
   - 
-    iMod (step_expr_adequacy _ _ _ ts  with "Hwp Hsi") as "Hexpr".
+    iMod (step_expr_adequacy _ _ _ _ ts  with "Hwp Hsi") as "Hexpr".
     iIntros "!> !>". iMod "Hexpr". iModIntro.
     simpl. 
-    by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | ? | baz].
+    by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
   -
-    iMod (step_expr_adequacy _ _ _ ts with "Hwp Hsi") as "Hexpr".
+    iMod (step_expr_adequacy _ _ _ _ ts with "Hwp Hsi") as "Hexpr".
     iIntros "!> !>". iMod "Hexpr". iModIntro.
     simpl. 
-    by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | ? | ?].
+    by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
 Qed.
 
 Lemma mod_lookup_some {A} (l: list A) (i: nat):
@@ -513,7 +485,7 @@ Qed.
     Φ for the main thread. All the other threads namely have the trivial
     post condition
 *)
-Lemma scheduled_adequacy {R} (Φ: R -> iProp Σ) 
+Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) 
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
@@ -535,11 +507,11 @@ Proof.
   simpl. 
   destruct (mod_lookup_some ts i Hnil) as [t Hsome].
   iDestruct (big_sepL_insert_acc with "Hbigop") as "(Hwpct & Hrestore)"; first done.
-  iMod (step_thread_adequacy _ _ _ ts with "Hwpct HSi" ) as "H".
+  iMod (step_thread_adequacy _ _ _ _ ts with "Hwpct HSi" ) as "H".
   iIntros "!> !>".
   iMod "H". iModIntro.
   rewrite Hsome /=.  
-  destruct (runState _ h ts) as [[[t' σ'] ts'] | ? | baz]; try done; simpl.
+  destruct (runState _ h ts) as [[[t' σ'] ts'] | | ]; try done; simpl.
   iDestruct "H" as (ts'' ->) "(Hwpt' & $ & Hbigop)".
   iSplit. 
   - iPureIntro. rewrite insert_length app_length. lia. 
@@ -571,9 +543,9 @@ Proof.
 Qed.
 
 (*
-  I need the conclusion to say something abuot how ts can be split up
+  I need the conclusion to say something about how ts can be split up
 *)
-Lemma check_main_foo {A V: Type} (ts: list (thread V A)) (r: A)
+Lemma check_main_head {A V: Type} (ts: list (thread V A)) (r: A)
   : check_main ts = Some r -> ∃ts', ts = (Main $ Answer r) :: ts'.
   Proof.
     intro H.
@@ -600,7 +572,7 @@ Lemma check_main_foo {A V: Type} (ts: list (thread V A)) (r: A)
   it should be iterating |==> ▷ |==>?
   is that legal?
 *)
-Lemma fuel_adequacy {R} (Φ: R -> iProp Σ) (n: nat)
+Lemma fuel_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
@@ -617,10 +589,10 @@ Proof.
   iInduction n as [|n'] "IH" forall (s h ts);
   iIntros (Hnil) "Hsi Hbigop".
   - done.
-  - iPoseProof (scheduled_adequacy _ _ s  with "Hsi Hbigop" ) as "H"; try done.
+  - iPoseProof (scheduled_adequacy _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
     iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
     rewrite run_bind_dist.
-    destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | ? | ?]; try done.
+    destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | | ]; try done.
     +
       rewrite run_bind_dist. 
       rewrite run_get_threads.
@@ -628,7 +600,7 @@ Proof.
       * iSimpl. 
         iMod "H". iIntros "!> !>". 
         iApply nlaters'. iMod "H". 
-        apply check_main_foo in E.
+        apply check_main_head in E.
         destruct E as [ts'' E]. rewrite E. simpl.
         iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
         rewrite wp_unfold /=. done.
@@ -644,12 +616,30 @@ Proof.
       iApply nlaters'. done.
 Qed.
 
-
+(*
+  So what needs to happen here?
+  1. I need to be in an iris context to use fuel_adequacy
+     because it uses wands rather than coq arrows.
+  2. To be able to lift the entailment from hpre like in adequacy_state_delay
+     I will need to get a gname to allocate the initial heap.
+     Why is there a gname in my context already? ok that was from the section,
+     it is removed now.
+  3. How do I get a gname? that is from this snippet:
+    but that requires a bupd at the top level.
+    can I change the soundness lemma to give me that?
+     iMod (own_alloc (● (lift_excl st))) as (γ) "Hsi".
+  4. When should I call lift entailment?
+  5. Atleast I have my initial bupd from the soundness lemma now.
+  6. I want to call fuel_adequacy, for that I need a big op of
+     wp's for all threads. That list is [Main e]. However
+     I have a wp for e in Hpre as expr not a thread.
+     let's lift that.
+     Now I need to get it in a big op
+*)
 Lemma adequacy {R} (φ: R -> Prop) (n: nat) 
   (SI: gmap nat nat -> iProp Σ)
   (s: scheduler nat R)
   (e: expr nat R)
-  (st st': heap nat)
   : (∀ γ, ⊢ wp (state_interp γ) e (λ x, ⌜φ x⌝)) ->
   match run_program n s e with
   | Here x => φ x
@@ -657,12 +647,24 @@ Lemma adequacy {R} (φ: R -> Prop) (n: nat)
   | EvalErr => True
   end.
   Proof.
-  Admitted.
+    intros Hpre.
+    unfold run_program.
+    apply (@later_bupdN_soundness'' (iResUR Σ) n).
+    iMod (own_alloc (● (lift_excl ∅))) as (γ) "Hsi".
+    { by apply auth_auth_valid. }
+    iDestruct (Hpre γ) as "Hwp". 
+    iPoseProof (fuel_adequacy _ _ n _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
+    destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl; done.
+  Qed.
 
+Print Assumptions adequacy.
+
+End adequacy.
 (* 
-
-
-
+  1. fancy update modality.
+  2. CmpSwp primitive?
+  
+  CmpSwp 
 
   adequacy statement : voor alle schedelures alle initieele heaps.
   - Als het interpret naar een value in een aantal stappen
