@@ -14,18 +14,46 @@ Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop
   | FreeE l   => λ _, is_Some (σ !! l) /\ σ' = delete l σ
   end.
 
+
+(*
+ Now I want to change these update modalities to fancy update modalities
+ How do I want to do that? let's peak at the Iris wp definition.
+
+ I want to import
+ From iris.base_logic.lib Require Export fancy_updates oh that's already imported.
+ The definition of wp_pre requires an extra argument E for a mask.
+ The wand however can have two masks and iris uses empty there a lot.
+ 
+ 1. Research the meanings of the two masks?
+ 2. Why is it a coPset?
+ 3. where is the notation defined.
+*)
+
+Locate "|={ _ }=> _".
+Locate "|={ _ , _ }=> _".
+Check fupd.
+(* 
+  A fupd with one mask simply keeps the same mask.
+  A fupd with two masks goes from mask one to mask two.
+*)
+(* 
+  now I can take the mask after the type variable udner a -d> arrow. works.
+  The step for answer should never include any fupds so there we can use the same mask on both sides.
+  However, what do I do for Think, Fork and Vis.
+  So the coPset is a set of names, I can think tomorrow about how to use those.
+*)
 Definition wp_pre {Σ} {V} (SI: gmap loc V -> iProp Σ)
-     (go: discrete_funO (λ R, expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
-     discrete_funO (λ R, expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
-refine(λ R e Φ,
+     (go: discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
+     discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
+refine(λ R E e Φ,
         match e with
-        |Answer x  => |==> Φ x 
-        |Think e'  => |==> ▷ go R e' Φ
-        |Fork e' k => |==> ▷ (go R k Φ ∗ go unit e' (λ _, True))
+        |Answer x  => |={E}=> Φ x 
+        |Think e'  => |={E}=> ▷ go R E e' Φ
+        |Fork e' k => |={E}=> ▷ (go R E k Φ ∗ go unit E e' (λ _, True))
         (* make wp less determinstic  *)
         (* |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> (∃σ' v, ⌜command_predicate c σ σ' v⌝) ∗
             ∀ σ' v, ⌜command_predicate c σ σ' v⌝ -∗ SI σ' ∗ (go R (k v)) Φ *)
-        |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> ∃σ' v, ⌜command_predicate c σ σ' v⌝ ∗ SI σ' ∗ (go R (k v)) Φ
+        |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> ∃σ' v, ⌜command_predicate c σ σ' v⌝ ∗ SI σ' ∗ (go R E (k v)) Φ
         end
 )%I.
 Defined.
