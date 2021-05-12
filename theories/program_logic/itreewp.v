@@ -64,7 +64,7 @@ refine(λ R E e Φ,
         (* make wp less determinstic  *)
         (* |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> (∃σ' v, ⌜command_predicate c σ σ' v⌝) ∗
             ∀ σ' v, ⌜command_predicate c σ σ' v⌝ -∗ SI σ' ∗ (go R (k v)) Φ *)
-        |Vis c k   => ∀σ, SI σ ={E}=∗ ▷ |={E}=> ∃σ' v, ⌜command_predicate c σ σ' v⌝ ∗ SI σ' ∗ (go R E (k v)) Φ
+        |Vis c k   => ∀σ, SI σ ={E, ∅}=∗ ▷ |={∅, E}=> ∃σ' v, ⌜command_predicate c σ σ' v⌝ ∗ SI σ' ∗ (go R E (k v)) Φ
         end
 )%I.
 Defined.
@@ -91,6 +91,12 @@ refine (
   end
 )%I.
 Defined.
+
+Lemma wp'_unfold {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R)  (Φ: R -> iProp Σ)
+  : wp' SI R E e Φ  ≡  wp_pre SI (wp' SI) R E e Φ.
+Proof.
+  apply (fixpoint_unfold (wp_pre SI)).
+Qed.
 
 Lemma wp_unfold {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R)  (Φ: R -> iProp Σ)
   : wp SI E e Φ  ≡  wp_pre SI (wp' SI) R E e Φ.
@@ -171,32 +177,63 @@ Proof.
     iApply "IH". done.
 Qed.
 
+Inductive atomic {V R: Type}: expr V R -> Prop :=
+|answer_atomic:  ∀ x, atomic (Answer x)
+|think_atomic:  ∀ x, atomic (Think (Answer x))
+|vis_atomic: ∀c, atomic (Vis c Answer).
+
 Lemma wp_atomic {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (e: expr V R) (Φ: R -> iProp Σ)
+  (a: atomic e)
   (* Perhaps some premisse about e being atomic *)
   : (|={E1, E2}=> wp SI E2 e (λ v, |={E2, E1}=> Φ v)) ⊢ wp SI E1 e Φ.
 Proof.
-  iLöb as "IH" forall (e).
   iIntros "Hwp".
   rewrite wp_unfold. 
   rewrite wp_unfold. 
-  destruct e; simpl.
+  inversion a; simpl.
   - iMod "Hwp". iMod "Hwp". iMod "Hwp".
     done.
   - iMod "Hwp". iMod "Hwp". iModIntro.
     iNext. iMod "Hwp". 
-    (* iDestruct ("IH" with "Hwp" ) as "bla". *)
-    iApply "IH". iSimpl. iModIntro.
-  -
-  -
-
+    rewrite wp'_unfold. rewrite wp'_unfold. simpl.
+    iMod "Hwp".  iMod "Hwp". done.
+  - iIntros (σ) "HSi".
+    iMod "Hwp". iDestruct ("Hwp" with "HSi") as "Hwp".
+    iMod "Hwp". iModIntro. iNext. iMod "Hwp".
+    iDestruct ("Hwp") as (σ' v) "(Hcmd & HSi & Hwp)".
+    iExists σ', v. iFrame.
+    rewrite wp'_unfold. rewrite wp'_unfold. simpl.
+    iMod "Hwp". iMod "Hwp".
+    done.
 Qed.
 
+Lemma wp_strong_mono_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
+  (e: expr V R) (Φ Ψ: R -> iProp Σ)
+  : wp SI E1 e Φ -∗ (∀ v, Φ v ={E2}=∗ Ψ v) -∗ wp SI E2 e Ψ.
+Proof.
+  iLöb as "IH" forall (e).
+  rewrite wp_unfold.
+  rewrite wp_unfold.
+  iIntros "Hwp H".
+  destruct e; simpl.
+  - iMod ("H" with "Hwp").
+    done.
+  - iMod "Hwp". iIntros "!> !>". 
+    iApply ("IH" $! e with "Hwp H").
+  - iMod "Hwp". iIntros "!> !>". 
+    iDestruct "Hwp" as "(Hwpe2 & $)".
+    iApply ("IH" $! e2 with "Hwpe2 H").
+  - iIntros (σ) "HSi".
+    iMod ("Hwp" with "HSi") as "Hwp".
+    iIntros "!> !>".
+    iMod "Hwp". iModIntro.
+    iDestruct "Hwp" as (σ' v) "(Hcom & HSi & Hwp)".
+    iExists σ', v. iFrame. 
+    iApply ("IH"  with "Hwp H"). 
+Qed.
 
-
-
-
-Lemma wp_strong_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma wp_strong_mono_bupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
   : wp SI E e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI E e Ψ.
 Proof.
@@ -221,7 +258,7 @@ Proof.
     iApply ("IH"  with "Hwp H"). 
 Qed.
 
-Lemma wp_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma wp_mono {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (e: expr V R) (Φ Ψ: R -> iProp Σ)
    :wp SI E e Φ -∗ (∀ v, Φ v -∗ Ψ v) -∗ wp SI E e Ψ.
 Proof.
@@ -232,7 +269,7 @@ Proof.
     iApply ("H" with "Hphi").
 Qed.
 
-Lemma wp_fmap {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma wp_fmap {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (f: R -> B) (Φ: B -> iProp Σ) (e: expr V R)
   : wp SI E e (Φ ∘ f ) -∗ wp SI E (f <$> e) Φ. 
 Proof.
@@ -243,7 +280,7 @@ Proof.
   iApply (wp_return with "Hpost").
 Qed.
 
-Lemma wp_iter {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) (Φ: B -> iProp Σ)
+Lemma wp_iter  {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) (Φ: B -> iProp Σ)
   (x: R)
   (f: R -> expr V (R + B)):
   wp SI E (f x) (case_ (λ x, ▷ wp SI E (iter f x) Φ) Φ) -∗
@@ -258,7 +295,24 @@ Proof.
   - by iApply wp_return.
 Qed.
 
-Lemma bupd_wp {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma fupd_wp  {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+ (e: expr V R) (Φ : R -> iProp Σ)
+ : (|={E}=> wp SI E e Φ) ⊢ wp SI E e Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite wp_unfold.
+  unfold wp_pre.
+  destruct e.
+  - iMod "Hwp" as "Hwp".
+    by iMod "Hwp" as "Hwp".
+  - iMod "Hwp" as "Hwp".
+    by iMod "Hwp" as "Hwp".
+  - iMod "Hwp" as "Hwp".
+    by iMod "Hwp" as "Hwp".
+  - by iMod "Hwp" as "Hwp".
+Qed.
+
+Lemma bupd_wp  {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  (e: expr V R) (Φ : R -> iProp Σ)
  : (|==> wp SI E e Φ) ⊢ wp SI E e Φ.
 Proof.
@@ -275,7 +329,18 @@ Proof.
   - by iMod "Hwp" as "Hwp".
 Qed.
 
-Lemma wp_bupd {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+
+Lemma wp_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+ (e: expr V R) (Φ : R -> iProp Σ) 
+ : wp SI E e (λ v, |={E}=> Φ v) ⊢ wp SI E e Φ.
+Proof.
+  iIntros "Hwp".
+  iApply (wp_strong_mono with "Hwp").
+  auto.
+Qed.
+
+
+Lemma wp_bupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  (e: expr V R) (Φ : R -> iProp Σ) 
  : wp SI E e (λ v, |==> Φ v) ⊢ wp SI E e Φ.
 Proof.
