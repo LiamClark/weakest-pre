@@ -5,6 +5,9 @@ From iris.base_logic.lib Require Export fancy_updates.
 From shiris.program_logic Require Import modal itree evaluation.
 Set Default Proof Using "Type".
 
+Section itreewp.
+  Context`{!invG Σ}. 
+
 (* Curry the value R so it can be changed by the dependent pattern match on c *)
 Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop :=
   match c with
@@ -50,7 +53,7 @@ Check fupd.
 *)
 
 SearchAbout FUpd.
-Definition wp_pre {Σ} {V} (SI: gmap loc V -> iProp Σ)
+Definition wp_pre {V} (SI: gmap loc V -> iProp Σ)
      (go: discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
      discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
 refine(λ R E e Φ,
@@ -66,20 +69,20 @@ refine(λ R E e Φ,
 )%I.
 Defined.
 
-Instance wp_pre_contractive {Σ A SI}: Contractive (@wp_pre Σ A SI).
+Instance wp_pre_contractive {A SI}: Contractive (@wp_pre A SI).
 Proof.
   rewrite /wp_pre => n wp wp' Hwp R E e1 Φ.
   repeat (f_contractive || f_equiv); apply Hwp.
 Qed.
 
-Definition wp' {Σ} {V} (SI: gmap nat V -> iProp Σ)
+Definition wp' {V} (SI: gmap nat V -> iProp Σ)
               : ∀R, coPset -> expr V R -> (R -> iProp Σ) ->iProp Σ :=
     fixpoint (wp_pre SI ).
 
-Definition wp {Σ} {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R) (Φ: R -> iProp Σ): iProp Σ := 
+Definition wp {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R) (Φ: R -> iProp Σ): iProp Σ := 
     wp' SI R E e Φ.
 
-Definition wp_thread {Σ} {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (t: thread V R) 
+Definition wp_thread {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (t: thread V R) 
 : (R -> iProp Σ) -> iProp Σ.
 refine (
   match t with
@@ -89,20 +92,20 @@ refine (
 )%I.
 Defined.
 
-Lemma wp_unfold {Σ} {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R)  (Φ: R -> iProp Σ)
+Lemma wp_unfold {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R)  (Φ: R -> iProp Σ)
   : wp SI E e Φ  ≡  wp_pre SI (wp' SI) R E e Φ.
 Proof.
   apply (fixpoint_unfold (wp_pre SI)).
 Qed.
 
-Lemma wp_return {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma wp_return {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (x: R) (Φ: R -> iProp Σ): Φ x -∗ wp SI E (mret x) Φ.
 Proof.
   iIntros"H".
   by rewrite wp_unfold.
 Qed.
 
-Lemma wp_think {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI E e Φ -∗ wp SI E (Think e) Φ.
 Proof.
   iIntros "Hwp".
@@ -111,7 +114,7 @@ Proof.
   done.
 Qed.
 
-Lemma wp_bind {Σ} {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma wp_bind {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R): 
   wp SI E e (λ x, wp SI E (f x) Φ) -∗ wp SI E (e ≫= f) Φ.
 Proof.
@@ -133,9 +136,26 @@ Proof.
     iNext.
     iMod ("H") as (σ' v) "H". iModIntro.
     iExists σ', v.
-    iDestruct "H" as  "($ & $ & Hwp)". 
+    iDestruct "H" as "($ & $ & Hwp)". 
     iApply "IH". done.
 Qed.
+
+
+Print uPred_fupd.
+Lemma wp_vup {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+  (e: expr V R) (Φ: R -> iProp Σ): (|={E}=> wp SI E e (λ v, |={E}=> Φ v)) ⊢ wp SI E e Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite wp_unfold.
+  rewrite wp_unfold.
+  unfold wp_pre.
+Admitted.
+
+Lemma wp_vup {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+  (e: expr V R) (Φ: R -> iProp Σ)
+  : (|={E}=> wp SI E e (λ v, |={E}=> Φ v)) ⊢ wp SI E e Φ.
+Admitted.
+
 
 Lemma wp_strong_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
@@ -235,6 +255,8 @@ Proof.
   iMod "Hwp". 
   done.
 Qed.
+
+End itree_wp.
 
 (*Heap rules *)
 Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
