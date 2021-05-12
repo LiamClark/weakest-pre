@@ -59,7 +59,7 @@ Definition wp_pre {V} (SI: gmap loc V -> iProp Σ)
 refine(λ R E e Φ,
         match e with
         |Answer x  => |={E}=> Φ x 
-        |Think e'  => |={E}=> ▷ |={E}=> go R E e' Φ
+        |Think e'  => |={E, ∅}=> ▷ |={∅, E}=> go R E e' Φ
         |Fork e' k => |={E}=> ▷ (go R E k Φ ∗ go unit E e' (λ _, True))
         (* make wp less determinstic  *)
         (* |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> (∃σ' v, ⌜command_predicate c σ σ' v⌝) ∗
@@ -152,8 +152,10 @@ Proof.
   unfold wp_pre.
   destruct e; simpl.
   - repeat (iMod "Hwp"). done.
-  - repeat (iMod "Hwp"). 
-    iModIntro. iNext.
+  - iMod "Hwp". 
+    iMod "Hwp". iModIntro.
+    iNext. 
+    iMod "Hwp". iModIntro.
     iApply "IH". done.
   - repeat (iMod "Hwp"). 
     iModIntro. iNext.
@@ -174,14 +176,17 @@ Lemma wp_atomic {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (* Perhaps some premisse about e being atomic *)
   : (|={E1, E2}=> wp SI E2 e (λ v, |={E2, E1}=> Φ v)) ⊢ wp SI E1 e Φ.
 Proof.
-iLöb as "IH" forall (e).
+  iLöb as "IH" forall (e).
   iIntros "Hwp".
   rewrite wp_unfold. 
   rewrite wp_unfold. 
   destruct e; simpl.
   - iMod "Hwp". iMod "Hwp". iMod "Hwp".
     done.
-  - iMod "Hwp". iMod "Hwp". iNext. iModIntro.
+  - iMod "Hwp". iMod "Hwp". iModIntro.
+    iNext. iMod "Hwp". 
+    (* iDestruct ("IH" with "Hwp" ) as "bla". *)
+    iApply "IH". iSimpl. iModIntro.
   -
   -
 
