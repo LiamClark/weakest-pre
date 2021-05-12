@@ -58,13 +58,13 @@ Definition wp_pre {V} (SI: gmap loc V -> iProp Σ)
      discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
 refine(λ R E e Φ,
         match e with
-        |Answer x  => |==> Φ x 
-        |Think e'  => |==> ▷ go R E e' Φ
-        |Fork e' k => |==> ▷ (go R E k Φ ∗ go unit E e' (λ _, True))
+        |Answer x  => |={E}=> Φ x 
+        |Think e'  => |={E}=> ▷ |={E}=> go R E e' Φ
+        |Fork e' k => |={E}=> ▷ (go R E k Φ ∗ go unit E e' (λ _, True))
         (* make wp less determinstic  *)
         (* |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> (∃σ' v, ⌜command_predicate c σ σ' v⌝) ∗
             ∀ σ' v, ⌜command_predicate c σ σ' v⌝ -∗ SI σ' ∗ (go R (k v)) Φ *)
-        |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> ∃σ' v, ⌜command_predicate c σ σ' v⌝ ∗ SI σ' ∗ (go R E (k v)) Φ
+        |Vis c k   => ∀σ, SI σ ={E}=∗ ▷ |={E}=> ∃σ' v, ⌜command_predicate c σ σ' v⌝ ∗ SI σ' ∗ (go R E (k v)) Φ
         end
 )%I.
 Defined.
@@ -110,7 +110,7 @@ Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
 Proof.
   iIntros "Hwp".
   iEval (rewrite wp_unfold). 
-  unfold wp_pre. iModIntro.
+  unfold wp_pre. iModIntro. iNext.
   done.
 Qed.
 
@@ -143,18 +143,52 @@ Qed.
 
 Print uPred_fupd.
 Lemma wp_vup {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
-  (e: expr V R) (Φ: R -> iProp Σ): (|={E}=> wp SI E e (λ v, |={E}=> Φ v)) ⊢ wp SI E e Φ.
-Proof.
-  iIntros "Hwp".
-  rewrite wp_unfold.
-  rewrite wp_unfold.
-  unfold wp_pre.
-Admitted.
-
-Lemma wp_vup {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ: R -> iProp Σ)
   : (|={E}=> wp SI E e (λ v, |={E}=> Φ v)) ⊢ wp SI E e Φ.
-Admitted.
+Proof.
+  iLöb as "IH" forall (e).
+  iIntros "Hwp".
+  rewrite wp_unfold. rewrite wp_unfold.
+  unfold wp_pre.
+  destruct e; simpl.
+  - repeat (iMod "Hwp"). done.
+  - repeat (iMod "Hwp"). 
+    iModIntro. iNext.
+    iApply "IH". done.
+  - repeat (iMod "Hwp"). 
+    iModIntro. iNext.
+    iDestruct "Hwp" as "(Hwp & $)".
+    iApply "IH". done.
+  - iIntros (σ) "HSi".
+    iMod "Hwp".
+    iDestruct ("Hwp" with "HSi" ) as "Hwp".
+    iMod "Hwp". iModIntro. iNext.
+    iMod "Hwp". iModIntro.
+    iDestruct ("Hwp") as (σ' v) "(Hcmd & HSi & Hwp)".
+    iExists σ', v. iFrame.
+    iApply "IH". done.
+Qed.
+
+Lemma wp_atomic {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
+  (e: expr V R) (Φ: R -> iProp Σ)
+  (* Perhaps some premisse about e being atomic *)
+  : (|={E1, E2}=> wp SI E2 e (λ v, |={E2, E1}=> Φ v)) ⊢ wp SI E1 e Φ.
+Proof.
+iLöb as "IH" forall (e).
+  iIntros "Hwp".
+  rewrite wp_unfold. 
+  rewrite wp_unfold. 
+  destruct e; simpl.
+  - iMod "Hwp". iMod "Hwp". iMod "Hwp".
+    done.
+  - iMod "Hwp". iMod "Hwp". iNext. iModIntro.
+  -
+  -
+
+Qed.
+
+
+
 
 
 Lemma wp_strong_mono {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
