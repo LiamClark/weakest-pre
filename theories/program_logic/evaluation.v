@@ -1,8 +1,6 @@
 From stdpp Require Import base gmap list streams.
 From shiris.program_logic Require Import itree.
 
-(* Ask casper how to credit his blog post*)
-
 Definition heap V := gmap nat V.
 
 (* How am I going to differentiate between the main thread that returns a value,

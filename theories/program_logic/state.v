@@ -1,17 +1,18 @@
 From stdpp Require Import base gmap fin_sets fin_map_dom.
 
-Record state (ST A: Type): Type := State {
-                                      runState: ST -> option (A * ST)
-                                     }.
+Record state (ST A: Type): Type := 
+    State {
+       runState: ST -> option (A * ST)
+    }.
 
 
 Arguments State {_ _} _.
 Arguments runState {_ _} _.
 
-Instance fmap_state: FMap (state ST)  :=
-  λ ST A B f fa, State $ λ st, (λ '(a, b), (f a , b)) <$> (runState fa st).
+Instance fmap_state ST: FMap (state ST) :=
+  λ A B f fa, State $ λ st, (λ '(a, b), (f a , b)) <$> (runState fa st).
 
-Instance mret_state ST : MRet (state ST) := λ A a, State $ λ s, Some (a, s).
+Instance mret_state ST: MRet (state ST) := λ A a, State $ λ s, Some (a, s).
 
 Instance mbind_state ST: MBind (state ST) :=
   λ _ _ f ma, State $
@@ -30,7 +31,7 @@ Section state_op.
    Definition getS: state ST ST :=
      State $ λ st, Some (st, st).
   
-   Definition putS (x: ST): state ST unit :=
+   Definition putS (x: ST): state ST () :=
      State $ λ st, Some (tt, x).
 
    Definition modifyS (f: ST -> ST): state ST () :=

@@ -13,7 +13,7 @@ CoInductive itree (E: Type -> Type) (R: Type): Type :=
 | Answer (r: R) (* computation terminating with value r *)
 | Think (t: itree E R) (* "silent" tau transition with child t *)
 | Fork: itree E () ->  itree E R -> itree E R
-| Vis: ∀{A: Type}, E A ->  (A -> itree E R) -> itree E R.
+| Vis: ∀{A: Type}, E A -> (A -> itree E R) -> itree E R.
 
 Arguments Answer {_ _}.
 Arguments Think {_ _}.
@@ -99,7 +99,7 @@ Proof.
   done.
 Qed.
 
-CoFixpoint loop {V A B C} (f: (C + A) -> expr V (C + B)): A -> expr V B :=
+Definition loop {V A B C} (f: (C + A) -> expr V (C + B)): A -> expr V B :=
     λ a, iter (λ ca,
                  cb ← f ca ;
                  match cb with

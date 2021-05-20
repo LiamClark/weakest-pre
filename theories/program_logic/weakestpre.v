@@ -124,7 +124,7 @@ Section state_wp.
 
 End state_wp.
 
-Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
 
 
 
@@ -172,7 +172,7 @@ Section state_wp_gp.
     unfold points_to.
     iDestruct (own_valid_2 with "Hsi Hpt") as "%".
     pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
     destruct (a H) as [H1 H2].
     iPureIntro.
     pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).

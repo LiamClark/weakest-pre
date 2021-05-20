@@ -52,7 +52,7 @@ Check fupd.
   Let me try proving a fancy update rule to see what I need.
 *)
 
-SearchAbout FUpd.
+Search FUpd.
 Definition wp_pre {V} (SI: gmap loc V -> iProp Σ)
      (go: discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
      discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
@@ -191,7 +191,7 @@ Proof.
   iIntros "Hwp".
   rewrite wp_unfold. 
   rewrite wp_unfold. 
-  inversion a; simpl.
+  destruct a; simpl.
   - iMod "Hwp". iMod "Hwp". iMod "Hwp".
     done.
   - iMod "Hwp". iMod "Hwp". iModIntro.
