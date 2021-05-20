@@ -111,12 +111,24 @@ Proof.
   by rewrite wp_unfold.
 Qed.
 
+Locate "|={ _ }[ _ ]▷=>".
+Locate "|={ _ }[ _ ]▷=> _".
+(* on newer versions of Iris *)
+Check fupd_mask_intro. 
+
+(* Check fupd_intro_mask. *)
+Check fupd_mask_weaken.
+
+(* ||={E1} P -∗ |={E1,E2}=> P *)
 Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI E e Φ -∗ wp SI E (Think e) Φ.
 Proof.
   iIntros "Hwp".
   iEval (rewrite wp_unfold). 
-  unfold wp_pre. iModIntro. iNext.
+  unfold wp_pre. 
+  iApply fupd_mask_intro; first set_solver.
+  iIntros "H".
+  iNext. iMod "H".  iModIntro.
   done.
 Qed.
 
@@ -208,18 +220,28 @@ Proof.
     done.
 Qed.
 
+
+Check fupd_mask_mono.
 Lemma wp_strong_mono_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
-  : wp SI E1 e Φ -∗ (∀ v, Φ v ={E2}=∗ Ψ v) -∗ wp SI E2 e Ψ.
+  : E1 ⊆ E2 -> wp SI E1 e Φ -∗ (∀ v, Φ v ={E2}=∗ Ψ v) -∗ wp SI E2 e Ψ.
 Proof.
+  iIntros (Hmask).
   iLöb as "IH" forall (e).
   rewrite wp_unfold.
   rewrite wp_unfold.
   iIntros "Hwp H".
   destruct e; simpl.
-  - iMod ("H" with "Hwp").
-    done.
-  - iMod "Hwp". iIntros "!> !>". 
+  - 
+   iDestruct ("H" with "Hwp") as "H". 
+   iDestruct (fupd_mask_mono _ _ _ Hmask with "H") as "H'".
+   repeat (iMod "H'").
+   done. 
+  - 
+    iMod (fupd_mask_subseteq E1) as "Hclose"; first done. 
+    iMod "Hwp". iIntros "!> !>". 
+    iMod "Hwp". iMod "Hclose".
+    iModIntro.
     iApply ("IH" $! e with "Hwp H").
   - iMod "Hwp". iIntros "!> !>". 
     iDestruct "Hwp" as "(Hwpe2 & $)".
@@ -231,31 +253,17 @@ Proof.
     iDestruct "Hwp" as (σ' v) "(Hcom & HSi & Hwp)".
     iExists σ', v. iFrame. 
     iApply ("IH"  with "Hwp H"). 
-Qed.
+Admitted.
 
 Lemma wp_strong_mono_bupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
   : wp SI E e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI E e Ψ.
 Proof.
-  iLöb as "IH" forall (e).
-  rewrite wp_unfold.
-  rewrite wp_unfold.
-  iIntros "Hwp H".
-  destruct e; simpl.
-  - iMod ("H" with "Hwp").
-    done.
-  - iMod "Hwp". iIntros "!> !>". 
-    iApply ("IH" $! e with "Hwp H").
-  - iMod "Hwp". iIntros "!> !>". 
-    iDestruct "Hwp" as "(Hwpe2 & $)".
-    iApply ("IH" $! e2 with "Hwpe2 H").
-  - iIntros (σ) "HSi".
-    iMod ("Hwp" with "HSi") as "Hwp".
-    iIntros "!> !>".
-    iMod "Hwp". iModIntro.
-    iDestruct "Hwp" as (σ' v) "(Hcom & HSi & Hwp)".
-    iExists σ', v. iFrame. 
-    iApply ("IH"  with "Hwp H"). 
+  iIntros "Hwp Hf".
+  iApply (wp_strong_mono_fupd with "Hwp").
+  - iIntros (v) "Hphi".
+    iMod ("Hf" with "Hphi") as "Hf".
+    iModIntro. done.
 Qed.
 
 Lemma wp_mono {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
