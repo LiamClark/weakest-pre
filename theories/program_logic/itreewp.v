@@ -87,7 +87,7 @@ Definition wp_thread {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (t: thread V
 refine (
   match t with
   | Main e => wp SI E e
-  | Forked e => λ _,  wp SI E e (λ _, True)
+  | Forked e => λ _,  wp SI ⊤ e (λ _, True)
   end
 )%I.
 Defined.
@@ -555,7 +555,7 @@ End heap_wp.
 
 Section adequacy.
  Context `{! inG Σ (heapR natO)}.
-
+ Context`{!invG Σ}. 
 (*
   Ok what does this bugger say again?
 
@@ -571,16 +571,17 @@ Section adequacy.
   Hence none of the soundness lemma's apply here.
 *)
 Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
+  (E: coPset)
   (h: heap nat)
   (ts: list (thread nat R))
   (e: expr nat A)
-  : wp (state_interp γ) e Ψ 
+  : wp (state_interp γ) E e Ψ 
   -∗ state_interp γ h
   ==∗ 
    ▷ |==> match runState (step_expr e) h ts with
      | Here (e', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝ 
-                             ∗ wp (state_interp γ) e' Ψ ∗ state_interp γ h'
-                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
+                             ∗ wp (state_interp γ) E e' Ψ ∗ state_interp γ h'
+                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) E t Φ
      | ProgErr => False
      | EvalErr => True
      end.
@@ -623,23 +624,23 @@ Proof.
 Qed.
 
 (* 
- ok next up second dude. What up here?
- we still have two post conditions, but they operate on the same type now.
+ We still have two post conditions, but they operate on the same type now.
  Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
  Φ is still the post condition for the main thread.
 *)
 Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ) 
+  (E: coPset)
   (h: heap nat)
   (ts: list (thread nat R))
   (ct: thread nat R)
-  : wp_thread (state_interp γ) ct Ψ 
+  : wp_thread (state_interp γ) E ct Ψ 
   -∗ state_interp γ h 
   ==∗ 
   ▷ |==> 
     match runState (step_thread ct) h ts with
     | Here (ct', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝
-                            ∗ wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
+                            ∗ wp_thread (state_interp γ) E ct' Ψ ∗ state_interp γ h'
+                            ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) E t Φ
     | ProgErr => False
     | EvalErr => True
     end.
@@ -668,23 +669,24 @@ Proof.
   by destruct l.
 Qed.
 
-(* OK third one up, now there is just one post condiiton left.
+(*  OK third one up, now there is just one post condition left.
     Φ for the main thread. All the other threads namely have the trivial
     post condition
 *)
 Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) 
+  (E: coPset)
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
   : ts ≠ [] -> 
   state_interp γ h 
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) E t Φ) 
   ==∗ 
   ▷ |==>
     match runState (single_step_thread s) h ts with
     | Here (s', h', ts') => ⌜length ts <= length ts'⌝
                             ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) E t Φ
     | ProgErr => False
     | EvalErr => True
     end.
@@ -694,7 +696,7 @@ Proof.
   simpl. 
   destruct (mod_lookup_some ts i Hnil) as [t Hsome].
   iDestruct (big_sepL_insert_acc with "Hbigop") as "(Hwpct & Hrestore)"; first done.
-  iMod (step_thread_adequacy _ _ _ _ ts with "Hwpct HSi" ) as "H".
+  iMod (step_thread_adequacy _ _ _ _ _ ts with "Hwpct HSi" ) as "H".
   iIntros "!> !>".
   iMod "H". iModIntro.
   rewrite Hsome /=.  
@@ -760,12 +762,13 @@ Lemma check_main_head {A V: Type} (ts: list (thread V A)) (r: A)
   is that legal?
 *)
 Lemma fuel_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
+  (E: coPset)
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
   : ts ≠ [] -> 
   state_interp γ h
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) E t Φ) 
   -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ |==> P) 
       match runState (eval_threaded n s) h ts with
       | Here (x, h', ts') => Φ x 
@@ -776,19 +779,19 @@ Proof.
   iInduction n as [|n'] "IH" forall (s h ts);
   iIntros (Hnil) "Hsi Hbigop".
   - done.
-  - iPoseProof (scheduled_adequacy _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
+  - iPoseProof (scheduled_adequacy _ _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
     iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
     rewrite run_bind_dist.
     destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | | ]; try done.
     +
       rewrite run_bind_dist. 
       rewrite run_get_threads.
-      destruct (check_main ts') eqn: E. 
+      destruct (check_main ts') eqn: E'. 
       * iSimpl. 
         iMod "H". iIntros "!> !>". 
         iApply nlaters'. iMod "H". 
-        apply check_main_head in E.
-        destruct E as [ts'' E]. rewrite E. simpl.
+        apply check_main_head in E'.
+        destruct E' as [ts'' E']. rewrite E'. simpl.
         iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
         rewrite wp_unfold /=. done.
       * iSimpl.
@@ -824,10 +827,11 @@ Qed.
      Now I need to get it in a big op
 *)
 Lemma adequacy {R} (φ: R -> Prop) (n: nat) 
+  (E: coPset)
   (SI: gmap nat nat -> iProp Σ)
   (s: scheduler nat R)
   (e: expr nat R)
-  : (∀ γ, ⊢ wp (state_interp γ) e (λ x, ⌜φ x⌝)) ->
+  : (∀ γ, ⊢ wp (state_interp γ) E e (λ x, ⌜φ x⌝)) ->
   match run_program n s e with
   | Here x => φ x
   | ProgErr => False
@@ -840,7 +844,7 @@ Lemma adequacy {R} (φ: R -> Prop) (n: nat)
     iMod (own_alloc (● (lift_excl ∅))) as (γ) "Hsi".
     { by apply auth_auth_valid. }
     iDestruct (Hpre γ) as "Hwp". 
-    iPoseProof (fuel_adequacy _ _ n _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
+    iPoseProof (fuel_adequacy _ _ n _ _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
     destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl; done.
   Qed.
 
