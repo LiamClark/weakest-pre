@@ -60,7 +60,7 @@ refine(λ R E e Φ,
         match e with
         |Answer x  => |={E}=> Φ x 
         |Think e'  => |={E, ∅}=> ▷ |={∅, E}=> go R E e' Φ
-        |Fork e' k => |={E}=> ▷ (go R E k Φ ∗ go unit E e' (λ _, True))
+        |Fork e' k => |={E, ∅}=> ▷ |={∅, E}=> (go R E k Φ ∗ go unit ⊤ e' (λ _, True))
         (* make wp less determinstic  *)
         (* |Vis c k   => ∀σ, SI σ ==∗ ▷ |==> (∃σ' v, ⌜command_predicate c σ σ' v⌝) ∗
             ∀ σ' v, ⌜command_predicate c σ σ' v⌝ -∗ SI σ' ∗ (go R (k v)) Φ *)
@@ -146,7 +146,7 @@ Proof.
   - iEval (rewrite wp_unfold /=) in "H".
     iMod "H". iIntros "!> !>". iApply "IH". done.
   - iEval (rewrite wp_unfold /=) in "H".
-     iMod "H" as "(H & $)". iIntros "!> !>". 
+    iMod "H". iIntros "!> !>". iMod "H" as "(H & $)".
     iApply "IH". done.
   - iIntros (σ)  "HSi".
     iEval (rewrite wp_unfold /=) in "H".
@@ -177,7 +177,7 @@ Proof.
     iApply "IH". done.
   - repeat (iMod "Hwp"). 
     iModIntro. iNext.
-    iDestruct "Hwp" as "(Hwp & $)".
+    iMod "Hwp" as "(Hwp & $)".
     iApply "IH". done.
   - iIntros (σ) "HSi".
     iMod "Hwp".
@@ -243,24 +243,29 @@ Proof.
     iMod "Hwp". iMod "Hclose".
     iModIntro.
     iApply ("IH" $! e with "Hwp H").
-  - iMod "Hwp". iIntros "!> !>". 
-    iDestruct "Hwp" as "(Hwpe2 & $)".
+  - 
+    iMod (fupd_mask_subseteq E1) as "Hclose"; first done. 
+    iMod "Hwp". iIntros "!> !>".
+    iMod "Hwp" as "(Hwpe2 & $)".
+    iMod "Hclose".
+    iModIntro.
     iApply ("IH" $! e2 with "Hwpe2 H").
   - iIntros (σ) "HSi".
+    iMod (fupd_mask_subseteq E1) as "Hclose"; first done. 
     iMod ("Hwp" with "HSi") as "Hwp".
     iIntros "!> !>".
-    iMod "Hwp". iModIntro.
+    iMod "Hwp". iMod "Hclose". iModIntro.
     iDestruct "Hwp" as (σ' v) "(Hcom & HSi & Hwp)".
     iExists σ', v. iFrame. 
     iApply ("IH"  with "Hwp H"). 
-Admitted.
+Qed.
 
 Lemma wp_strong_mono_bupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
   : wp SI E e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI E e Ψ.
 Proof.
   iIntros "Hwp Hf".
-  iApply (wp_strong_mono_fupd with "Hwp").
+  iApply (wp_strong_mono_fupd with "Hwp"); first set_solver.
   - iIntros (v) "Hphi".
     iMod ("Hf" with "Hphi") as "Hf".
     iModIntro. done.
