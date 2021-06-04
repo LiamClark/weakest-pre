@@ -128,7 +128,7 @@ Proof.
   unfold wp_pre. 
   iApply fupd_mask_intro; first set_solver.
   iIntros "H".
-  iNext. iMod "H".  iModIntro.
+  iNext. iMod "H". iModIntro.
   done.
 Qed.
 
@@ -276,7 +276,7 @@ Lemma wp_mono {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    :wp SI E e Φ -∗ (∀ v, Φ v -∗ Ψ v) -∗ wp SI E e Ψ.
 Proof.
   iIntros "Hwp H".
-  iApply (wp_strong_mono with "Hwp").
+  iApply (wp_strong_mono_fupd with "Hwp"); first set_solver.
   - iIntros (v) "Hphi". 
     iModIntro.
     iApply ("H" with "Hphi").
@@ -348,35 +348,40 @@ Lemma wp_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  : wp SI E e (λ v, |={E}=> Φ v) ⊢ wp SI E e Φ.
 Proof.
   iIntros "Hwp".
-  iApply (wp_strong_mono with "Hwp").
+  iApply (wp_strong_mono_fupd with "Hwp"); first set_solver.
   auto.
 Qed.
-
 
 Lemma wp_bupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  (e: expr V R) (Φ : R -> iProp Σ) 
  : wp SI E e (λ v, |==> Φ v) ⊢ wp SI E e Φ.
 Proof.
   iIntros "Hwp".
-  iApply (wp_strong_mono with "Hwp").
+  iApply (wp_strong_mono_bupd with "Hwp").
   auto.
 Qed.
 
-Lemma wp_think' {Σ} {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
-  (e: expr V R) (Φ: R -> iProp Σ)
-  : wp SI E (Think e) Φ ==∗ ▷ wp SI E e Φ .
-Proof.
-  iIntros "Hwp".
-  rewrite wp_unfold. 
-  unfold wp_pre.
-  iMod "Hwp". 
-  done.
-Qed.
 
-End itree_wp.
+(* Hard to prove and I think irrelevant? *)
+(* Lemma wp_think' {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) *)
+  (* (e: expr V R) (Φ: R -> iProp Σ) *)
+  (* : wp SI E (Think e) Φ ={E}=∗ ▷ wp SI E e Φ . *)
+(* Proof. *)
+  (* iIntros "Hwp". *)
+  (* rewrite wp_unfold.  *)
+  (* unfold wp_pre. *)
+  (* iDestruct (fupd_mask_intro with "Hwp") as "H'". *)
+  (* iMod "Hwp".   *)
+  (* iApply fupd_mask_intro; first set_solver. *)
+  (* iIntros "Hclose". *)
+  (* iNext. iMod "Hwp". *)
+  (* done. *)
+(* Qed. *)
+
+End itreewp.
 
 (*Heap rules *)
-Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
 
 Lemma fresh_none (σ: gmap nat nat): 
  σ !! fresh_loc σ = None.
@@ -388,7 +393,7 @@ Qed.
 
 Section heap_wp.
   Context `{! inG Σ (heapR natO)}.
-
+  Context`{!invG Σ}. 
  (* Now come the rule that needs the points to connective in their weakest pre definition.
      We therefore first define this in terms of the Authorative camera.
    *)
@@ -417,7 +422,7 @@ Section heap_wp.
     unfold state_interp. unfold points_to.
     iDestruct (own_valid_2 with "Hsi Hpt") as "%".
     pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
     destruct (a H) as [H1 H2].
     iPureIntro.
     pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
@@ -481,7 +486,8 @@ Section heap_wp.
     iIntros "Hpt Hpost".
     rewrite wp_unfold. unfold wp_pre.
     iIntros (σ) "Hsi".
-    iIntros "!> !> !>". iExists σ, v. simpl.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro. iExists σ, v. simpl.
     iDestruct (si_points_to_agree with "Hsi Hpt") as %H. 
     iSplit; try done.
     iFrame. 
@@ -496,7 +502,9 @@ Section heap_wp.
     iIntros (σ) "Hsi". 
     iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
     iMod (points_to_update with "Hsi Hpt") as "(Hsi & Hpt)". 
-    iIntros "!> !> !>". iExists (<[n := v']> σ), tt. simpl.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iExists (<[n := v']> σ), tt. simpl.
     iSplit.
     - iPureIntro. split.
       + apply (mk_is_Some _ _ Hsome).
@@ -512,7 +520,9 @@ Section heap_wp.
     rewrite wp_unfold. unfold wp_pre.
     iIntros (σ) "Hsi".
     iMod (si_alloc with "Hsi") as "(Hsi & Hpt)".
-    iIntros "!> !> !>". iExists (<[fresh_loc σ := v]> σ), (fresh_loc σ). simpl.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iExists (<[fresh_loc σ := v]> σ), (fresh_loc σ). simpl.
     iSplit.
     - iPureIntro. split.
       + done.
@@ -529,7 +539,9 @@ Section heap_wp.
     iIntros (σ) "Hsi".
     iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
     iMod (si_free with "Hsi Hpt") as "Hsi".
-    iIntros "!> !> !>". iExists (delete l σ), tt. simpl.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iExists (delete l σ), tt. simpl.
     iSplit.
     - iPureIntro. split.
       + apply (mk_is_Some _ _ Hsome).
