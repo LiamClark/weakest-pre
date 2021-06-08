@@ -362,21 +362,15 @@ Proof.
 Qed.
 
 
-(* Hard to prove and I think irrelevant? *)
-(* Lemma wp_think' {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) *)
-  (* (e: expr V R) (Φ: R -> iProp Σ) *)
-  (* : wp SI E (Think e) Φ ={E}=∗ ▷ wp SI E e Φ . *)
-(* Proof. *)
-  (* iIntros "Hwp". *)
-  (* rewrite wp_unfold.  *)
-  (* unfold wp_pre. *)
-  (* iDestruct (fupd_mask_intro with "Hwp") as "H'". *)
-  (* iMod "Hwp".   *)
-  (* iApply fupd_mask_intro; first set_solver. *)
-  (* iIntros "Hclose". *)
-  (* iNext. iMod "Hwp". *)
-  (* done. *)
-(* Qed. *)
+Lemma wp_think' {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) 
+  (e: expr V R) (Φ: R -> iProp Σ)
+  : wp SI E (Think e) Φ ={E, ∅}=∗ ▷ |={∅, E}=> wp SI E e Φ .
+Proof.
+  iIntros "Hwp".
+  rewrite wp_unfold. 
+  unfold wp_pre.
+  done.
+Qed.
 
 End itreewp.
 
@@ -571,36 +565,37 @@ Section adequacy.
   Hence none of the soundness lemma's apply here.
 *)
 Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
-  (E: coPset)
   (h: heap nat)
   (ts: list (thread nat R))
   (e: expr nat A)
-  : wp (state_interp γ) E e Ψ 
+  : wp (state_interp γ) ⊤ e Ψ 
   -∗ state_interp γ h
-  ==∗ 
-   ▷ |==> match runState (step_expr e) h ts with
+  ={⊤, ∅}=∗ 
+   ▷ |={∅, ⊤}=> match runState (step_expr e) h ts with
      | Here (e', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝ 
-                             ∗ wp (state_interp γ) E e' Ψ ∗ state_interp γ h'
-                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) E t Φ
+                             ∗ wp (state_interp γ) ⊤ e' Ψ ∗ state_interp γ h'
+                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) ⊤ t Φ
      | ProgErr => False
      | EvalErr => True
      end.
 Proof.
   iIntros "Hwp Hsi".
   destruct e; simpl.
-  - iIntros "!> !> !>".
+  - 
+    iApply fupd_mask_intro; first set_solver. iIntros "Hclose". 
+    iModIntro. iMod "Hclose". iModIntro.
     iExists []. rewrite right_id_L.
     iFrame. auto.
   - 
-    iMod (wp_think' with "Hwp") as "Hwp". iIntros "!> !> !>".
+    iMod (wp_think' with "Hwp") as "Hwp".
+    iIntros "!> !>". iMod "Hwp". iModIntro.
     iExists []. rewrite right_id_L.
     iFrame. auto.
   -
-   rewrite wp_unfold. unfold wp_pre.
-   simpl.
+   rewrite wp_unfold. unfold wp_pre. simpl.
+   iMod "Hwp". iIntros "!> !>".
    iMod "Hwp" as "(Hwpe2 & Hwpe1)".
-   iModIntro. iNext. iFrame. simpl.
-   iModIntro. 
+   iModIntro. iFrame. simpl.
    iExists [_].
    iSplit; first done. by iFrame.
   -
