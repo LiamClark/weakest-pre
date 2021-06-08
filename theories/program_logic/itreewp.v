@@ -6,7 +6,7 @@ From shiris.program_logic Require Import modal itree evaluation.
 Set Default Proof Using "Type".
 
 Section itreewp.
-  Context`{!invG Σ}. 
+  Context `{!invG Σ}. 
 
 (* Curry the value R so it can be changed by the dependent pattern match on c *)
 Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop :=
@@ -82,11 +82,11 @@ Definition wp' {V} (SI: gmap nat V -> iProp Σ)
 Definition wp {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (e: expr V R) (Φ: R -> iProp Σ): iProp Σ := 
     wp' SI R E e Φ.
 
-Definition wp_thread {V R} (SI: gmap nat V -> iProp Σ) (E: coPset) (t: thread V R) 
+Definition wp_thread {V R} (SI: gmap nat V -> iProp Σ) (t: thread V R) 
 : (R -> iProp Σ) -> iProp Σ.
 refine (
   match t with
-  | Main e => wp SI E e
+  | Main e => wp SI ⊤ e
   | Forked e => λ _,  wp SI ⊤ e (λ _, True)
   end
 )%I.
@@ -574,7 +574,7 @@ Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp �
    ▷ |={∅, ⊤}=> match runState (step_expr e) h ts with
      | Here (e', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝ 
                              ∗ wp (state_interp γ) ⊤ e' Ψ ∗ state_interp γ h'
-                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) ⊤ t Φ
+                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
      | ProgErr => False
      | EvalErr => True
      end.
@@ -624,18 +624,17 @@ Qed.
  Φ is still the post condition for the main thread.
 *)
 Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ) 
-  (E: coPset)
   (h: heap nat)
   (ts: list (thread nat R))
   (ct: thread nat R)
-  : wp_thread (state_interp γ) E ct Ψ 
+  : wp_thread (state_interp γ) ct Ψ 
   -∗ state_interp γ h 
-  ==∗ 
-  ▷ |==> 
+  ={⊤, ∅}=∗ 
+   ▷ |={∅, ⊤}=> 
     match runState (step_thread ct) h ts with
     | Here (ct', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝
-                            ∗ wp_thread (state_interp γ) E ct' Ψ ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) E t Φ
+                            ∗ wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
+                            ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
     | ProgErr => False
     | EvalErr => True
     end.
@@ -669,19 +668,18 @@ Qed.
     post condition
 *)
 Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) 
-  (E: coPset)
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
   : ts ≠ [] -> 
   state_interp γ h 
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) E t Φ) 
-  ==∗ 
-  ▷ |==>
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  ={⊤, ∅}=∗ 
+   ▷ |={∅, ⊤}=> 
     match runState (single_step_thread s) h ts with
     | Here (s', h', ts') => ⌜length ts <= length ts'⌝
                             ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) E t Φ
+                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
     | ProgErr => False
     | EvalErr => True
     end.
@@ -691,7 +689,7 @@ Proof.
   simpl. 
   destruct (mod_lookup_some ts i Hnil) as [t Hsome].
   iDestruct (big_sepL_insert_acc with "Hbigop") as "(Hwpct & Hrestore)"; first done.
-  iMod (step_thread_adequacy _ _ _ _ _ ts with "Hwpct HSi" ) as "H".
+  iMod (step_thread_adequacy _ _ _ _ ts with "Hwpct HSi" ) as "H".
   iIntros "!> !>".
   iMod "H". iModIntro.
   rewrite Hsome /=.  
@@ -754,17 +752,16 @@ Lemma check_main_head {A V: Type} (ts: list (thread V A)) (r: A)
 
   The modalities seem to misallign here, it looks like
   it should be iterating |==> ▷ |==>?
-  is that legal?
+  is that legal? Yes, Yes it is.
 *)
 Lemma fuel_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
-  (E: coPset)
   (h: heap nat)
   (s: scheduler nat R)
   (ts: list (thread nat R))
   : ts ≠ [] -> 
   state_interp γ h
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) E t Φ) 
-  -∗ Nat.iter n (λ P : iPropI Σ, |==> ▷ |==> P) 
+  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+  -∗ Nat.iter n (λ P : iPropI Σ, |={⊤, ∅}=> ▷ |={∅,⊤}=> P) 
       match runState (eval_threaded n s) h ts with
       | Here (x, h', ts') => Φ x 
       | ProgErr => False
@@ -774,7 +771,7 @@ Proof.
   iInduction n as [|n'] "IH" forall (s h ts);
   iIntros (Hnil) "Hsi Hbigop".
   - done.
-  - iPoseProof (scheduled_adequacy _ _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
+  - iPoseProof (scheduled_adequacy _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
     iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
     rewrite run_bind_dist.
     destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | | ]; try done.
@@ -784,7 +781,7 @@ Proof.
       destruct (check_main ts') eqn: E'. 
       * iSimpl. 
         iMod "H". iIntros "!> !>". 
-        iApply nlaters'. iMod "H". 
+        iApply fupd_nlaters; first set_solver. iMod "H". 
         apply check_main_head in E'.
         destruct E' as [ts'' E']. rewrite E'. simpl.
         iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
@@ -796,9 +793,9 @@ Proof.
         pose (Hnil' := non_nil_bigger_than  Hnil H).
         iApply ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop").
     + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
-      iApply nlaters'. done.
+      iApply fupd_nlaters; first set_solver. done.
     + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
-      iApply nlaters'. done.
+      iApply fupd_nlaters; first set_solver. done.
 Qed.
 
 (*
@@ -822,11 +819,10 @@ Qed.
      Now I need to get it in a big op
 *)
 Lemma adequacy {R} (φ: R -> Prop) (n: nat) 
-  (E: coPset)
   (SI: gmap nat nat -> iProp Σ)
   (s: scheduler nat R)
   (e: expr nat R)
-  : (∀ γ, ⊢ wp (state_interp γ) E e (λ x, ⌜φ x⌝)) ->
+  : (∀ γ, ⊢ wp (state_interp γ) ⊤ e (λ x, ⌜φ x⌝)) ->
   match run_program n s e with
   | Here x => φ x
   | ProgErr => False
@@ -835,12 +831,18 @@ Lemma adequacy {R} (φ: R -> Prop) (n: nat)
   Proof.
     intros Hpre.
     unfold run_program.
-    apply (@later_bupdN_soundness'' (iResUR Σ) n).
+    apply (step_fupdN_soundness' _ (S n)). simpl. iIntros (inv).
+    (* apply (@later_bupdN_soundness'' (iResUR Σ) n). *)
     iMod (own_alloc (● (lift_excl ∅))) as (γ) "Hsi".
     { by apply auth_auth_valid. }
+    iApply fupd_mask_intro; first set_solver. iIntros "Hclose".
+    iModIntro. iMod "Hclose". iModIntro.
     iDestruct (Hpre γ) as "Hwp". 
-    iPoseProof (fuel_adequacy _ _ n _ _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
-    destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl; done.
+    iPoseProof (fuel_adequacy _ _ n  _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
+    destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl.
+    - iAssumption.  done.
+    -
+    -
   Qed.
 
 Print Assumptions adequacy.
