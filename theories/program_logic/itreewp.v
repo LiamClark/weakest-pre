@@ -293,7 +293,7 @@ Proof.
   iApply (wp_return with "Hpost").
 Qed.
 
-Lemma wp_iter  {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) (Φ: B -> iProp Σ)
+Lemma wp_iter {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) (Φ: B -> iProp Σ)
   (x: R)
   (f: R -> expr V (R + B)):
   wp SI E (f x) (case_ (λ x, ▷ wp SI E (iter f x) Φ) Φ) -∗
@@ -308,7 +308,7 @@ Proof.
   - by iApply wp_return.
 Qed.
 
-Lemma fupd_wp  {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma fupd_wp {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  (e: expr V R) (Φ : R -> iProp Σ)
  : (|={E}=> wp SI E e Φ) ⊢ wp SI E e Φ.
 Proof.
@@ -325,7 +325,7 @@ Proof.
   - by iMod "Hwp" as "Hwp".
 Qed.
 
-Lemma bupd_wp  {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+Lemma bupd_wp {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  (e: expr V R) (Φ : R -> iProp Σ)
  : (|==> wp SI E e Φ) ⊢ wp SI E e Φ.
 Proof.
@@ -387,7 +387,7 @@ Qed.
 
 Section heap_wp.
   Context `{! inG Σ (heapR natO)}.
-  Context`{!invG Σ}. 
+  Context `{!invG Σ}. 
  (* Now come the rule that needs the points to connective in their weakest pre definition.
      We therefore first define this in terms of the Authorative camera.
    *)
@@ -447,7 +447,6 @@ Section heap_wp.
       done.
     Qed.
 
-  
   Lemma si_alloc σ v:
     let l := fresh_loc σ
     in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
@@ -546,258 +545,257 @@ Section heap_wp.
 End heap_wp.
 
 
-
 Section adequacy.
- Context `{!inG Σ (heapR natO)}.
- Context`{!invG Σ}. 
-(*
-  Ok what does this bugger say again?
+  Context `{!inG Σ (heapR natO)}.
+  Context `{!invG Σ}. 
 
-  We are stepping in e.
-  With two post conditions ψ is the post condition for the expression
-  we are stepping right now.
-  Φ is the post condition for the main thread, thus it is the one that matters
-  for the rest of the threadpool. Since forked threads discard it, it only applies
-  to the main thread.
+  (*
+    Ok what does this bugger say again?
 
-  Since this is the deepest level it seems we should use the soundness lemmas at this point.
-  Except no. We do not take in account that Φ and Ψ are pure. They are any iProp predicates.
-  Hence none of the soundness lemma's apply here.
-*)
-Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
-  (h: heap nat)
-  (ts: list (thread nat R))
-  (e: expr nat A)
-  : wp (state_interp γ) ⊤ e Ψ 
-  -∗ state_interp γ h
-  ={⊤, ∅}=∗ 
-   ▷ |={∅, ⊤}=> match runState (step_expr e) h ts with
-     | Here (e', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝ 
-                             ∗ wp (state_interp γ) ⊤ e' Ψ ∗ state_interp γ h'
-                             ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
-     | ProgErr => False
-     | EvalErr => True
-     end.
-Proof.
-  iIntros "Hwp Hsi".
-  destruct e; simpl.
-  - 
-    iApply fupd_mask_intro; first set_solver. iIntros "Hclose". 
-    iModIntro. iMod "Hclose". iModIntro.
-    iExists []. rewrite right_id_L.
-    iFrame. auto.
-  - 
-    iMod (wp_think' with "Hwp") as "Hwp".
-    iIntros "!> !>". iMod "Hwp". iModIntro.
-    iExists []. rewrite right_id_L.
-    iFrame. auto.
-  -
-   rewrite wp_unfold. unfold wp_pre. simpl.
-   iMod "Hwp". iIntros "!> !>".
-   iMod "Hwp" as "(Hwpe2 & Hwpe1)".
-   iModIntro. iFrame. simpl.
-   iExists [_].
-   iSplit; first done. by iFrame.
-  -
-    rewrite wp_unfold. unfold wp_pre.
-    iMod ("Hwp" with "Hsi") as "Hwp".
-    iIntros "!> !>".
-    iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-    destruct e; simpl.
-    + destruct H as (Hlookup & Heq). rewrite Hlookup. subst h. simpl.
-      iExists []. rewrite right_id_L.
-      iFrame. auto.
-    + destruct H as (Hlookup & Heq). subst σ'. destruct v.
-      iExists []. rewrite right_id_L.
-      iFrame. auto.
-    + destruct H as (Hlookup & Heq). subst σ' v. 
-      iExists []. rewrite right_id_L.
-      iFrame. auto.
-    + destruct H as (Hlookup & Heq). subst σ'. destruct v.
-      iExists []. rewrite right_id_L.
-      iFrame. auto.
-Qed.
+    We are stepping in e.
+    With two post conditions ψ is the post condition for the expression
+    we are stepping right now.
+    Φ is the post condition for the main thread, thus it is the one that matters
+    for the rest of the threadpool. Since forked threads discard it, it only applies
+    to the main thread.
 
-(* 
- We still have two post conditions, but they operate on the same type now.
- Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
- Φ is still the post condition for the main thread.
-*)
-Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ) 
-  (h: heap nat)
-  (ts: list (thread nat R))
-  (ct: thread nat R)
-  : wp_thread (state_interp γ) ct Ψ 
-  -∗ state_interp γ h 
-  ={⊤, ∅}=∗ 
-   ▷ |={∅, ⊤}=> 
-    match runState (step_thread ct) h ts with
-    | Here (ct', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝
-                            ∗ wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
-    | ProgErr => False
-    | EvalErr => True
-    end.
-Proof.
-  iIntros "Hwp Hsi".
-  simpl.
-  destruct ct; simpl.
-  - 
-    iMod (step_expr_adequacy _ _ _ _ ts  with "Hwp Hsi") as "Hexpr".
-    iIntros "!> !>". iMod "Hexpr". iModIntro.
-    simpl. 
-    by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
-  -
-    iMod (step_expr_adequacy _ _ _ _ ts with "Hwp Hsi") as "Hexpr".
-    iIntros "!> !>". iMod "Hexpr". iModIntro.
-    simpl. 
-    by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
-Qed.
-
-Lemma mod_lookup_some {A} (l: list A) (i: nat):
- l ≠ [] -> is_Some (l !! (i mod (length l))).
-Proof.
-  intro Hnil.
-  apply lookup_lt_is_Some_2. 
-  apply Nat.mod_upper_bound.
-  by destruct l.
-Qed.
-
-(*  OK third one up, now there is just one post condition left.
-    Φ for the main thread. All the other threads namely have the trivial
-    post condition
-*)
-Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) 
-  (h: heap nat)
-  (s: scheduler nat R)
-  (ts: list (thread nat R))
-  : ts ≠ [] -> 
-  state_interp γ h 
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
-  ={⊤, ∅}=∗ 
-   ▷ |={∅, ⊤}=> 
-    match runState (single_step_thread s) h ts with
-    | Here (s', h', ts') => ⌜length ts <= length ts'⌝
-                            ∗ state_interp γ h'
-                            ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
-    | ProgErr => False
-    | EvalErr => True
-    end.
-Proof.
-  iIntros (Hnil) "HSi Hbigop".
-  unfold single_step_thread. simpl. destruct (schedule s (ts, h)) as [i s'].
-  simpl. 
-  destruct (mod_lookup_some ts i Hnil) as [t Hsome].
-  iDestruct (big_sepL_insert_acc with "Hbigop") as "(Hwpct & Hrestore)"; first done.
-  iMod (step_thread_adequacy _ _ _ _ ts with "Hwpct HSi" ) as "H".
-  iIntros "!> !>".
-  iMod "H". iModIntro.
-  rewrite Hsome /=.  
-  destruct (runState _ h ts) as [[[t' σ'] ts'] | | ]; try done; simpl.
-  iDestruct "H" as (ts'' ->) "(Hwpt' & $ & Hbigop)".
-  iSplit. 
-  - iPureIntro. rewrite insert_length app_length. lia. 
-  - rewrite insert_app_l; last first. 
-    { apply Nat.mod_upper_bound. destruct ts; done. }
-   iFrame.
-   by iApply "Hrestore".
-Qed.
-
-Arguments mbind_state : simpl never.
-
-Lemma run_get_threads {V A} σ (ts: list (thread V A))
-  : runState get_threads σ ts = Here (ts, σ, ts).
-Proof.
-  done.
-Qed.
-
-Lemma non_nil_bigger_than {A} {ts ts' : list A}
-  : ts ≠ [] -> length ts ≤ length ts' -> ts' ≠ [].
-Proof.
-  intros Hnil Hlength.
-  destruct ts'.
-  -  destruct ts.
-    + done.
-    + simpl in *.
-    pose (Nat.nle_succ_0 _ Hlength). 
-    contradiction.
-  - done. 
-Qed.
-
-(*
-  I need the conclusion to say something about how ts can be split up
-*)
-Lemma check_main_head {A V: Type} (ts: list (thread V A)) (r: A)
-  : check_main ts = Some r -> ∃ts', ts = (Main $ Answer r) :: ts'.
+    Since this is the deepest level it seems we should use the soundness lemmas at this point.
+    Except no. We do not take in account that Φ and Ψ are pure. They are any iProp predicates.
+    Hence none of the soundness lemma's apply here.
+  *)
+  Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
+    (h: heap nat)
+    (ts: list (thread nat R))
+    (e: expr nat A)
+    : wp (state_interp γ) ⊤ e Ψ 
+    -∗ state_interp γ h
+    ={⊤, ∅}=∗ 
+     ▷ |={∅, ⊤}=> match runState (step_expr e) h ts with
+       | Here (e', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝ 
+                               ∗ wp (state_interp γ) ⊤ e' Ψ ∗ state_interp γ h'
+                               ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
+       | ProgErr => False
+       | EvalErr => True
+       end.
   Proof.
-    intro H.
-    destruct ts as [|t ts'].
-    - done.
-    - exists ts'. simpl in *.
-      destruct t.
-      + simpl in *.
-        destruct e; try done.
-        simpl in *.
-        injection H. intro Heq.
-        subst r. done.
-      + done.
+    iIntros "Hwp Hsi".
+    destruct e; simpl.
+    - 
+      iApply fupd_mask_intro; first set_solver. iIntros "Hclose". 
+      iModIntro. iMod "Hclose". iModIntro.
+      iExists []. rewrite right_id_L.
+      iFrame. auto.
+    - 
+      iMod (wp_think' with "Hwp") as "Hwp".
+      iIntros "!> !>". iMod "Hwp". iModIntro.
+      iExists []. rewrite right_id_L.
+      iFrame. auto.
+    -
+     rewrite wp_unfold. unfold wp_pre. simpl.
+     iMod "Hwp". iIntros "!> !>".
+     iMod "Hwp" as "(Hwpe2 & Hwpe1)".
+     iModIntro. iFrame. simpl.
+     iExists [_].
+     iSplit; first done. by iFrame.
+    -
+      rewrite wp_unfold. unfold wp_pre.
+      iMod ("Hwp" with "Hsi") as "Hwp".
+      iIntros "!> !>".
+      iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
+      destruct e; simpl.
+      + destruct H as (Hlookup & Heq). rewrite Hlookup. subst h. simpl.
+        iExists []. rewrite right_id_L.
+        iFrame. auto.
+      + destruct H as (Hlookup & Heq). subst σ'. destruct v.
+        iExists []. rewrite right_id_L.
+        iFrame. auto.
+      + destruct H as (Hlookup & Heq). subst σ' v. 
+        iExists []. rewrite right_id_L.
+        iFrame. auto.
+      + destruct H as (Hlookup & Heq). subst σ'. destruct v.
+        iExists []. rewrite right_id_L.
+        iFrame. auto.
   Qed.
-(* 
-  Get the iterated update lemma's into their own file,
-  iApply nlaters to introduce them
-  Then use the eqn from check_main to prove that:
-  the first entry in ts' is a Main.
-  That that thread is a Here.
-  Then get the post condition out.
 
-  The modalities seem to misallign here, it looks like
-  it should be iterating |==> ▷ |==>?
-  is that legal? Yes, Yes it is.
-*)
-Lemma fuel_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
-  (h: heap nat)
-  (s: scheduler nat R)
-  (ts: list (thread nat R))
-  : ts ≠ [] -> 
-  state_interp γ h
-  -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
-  -∗ Nat.iter n (λ P : iPropI Σ, |={⊤, ∅}=> ▷ |={∅,⊤}=> P) 
-      match runState (eval_threaded n s) h ts with
-      | Here (x, h', ts') => Φ x 
+  (* 
+   We still have two post conditions, but they operate on the same type now.
+   Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
+   Φ is still the post condition for the main thread.
+  *)
+  Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ) 
+    (h: heap nat)
+    (ts: list (thread nat R))
+    (ct: thread nat R)
+    : wp_thread (state_interp γ) ct Ψ 
+    -∗ state_interp γ h 
+    ={⊤, ∅}=∗ 
+     ▷ |={∅, ⊤}=> 
+      match runState (step_thread ct) h ts with
+      | Here (ct', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝
+                              ∗ wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
+                              ∗ [∗ list] t ∈ ts'', wp_thread (state_interp γ) t Φ
       | ProgErr => False
       | EvalErr => True
       end.
-Proof.
-  iInduction n as [|n'] "IH" forall (s h ts);
-  iIntros (Hnil) "Hsi Hbigop".
-  - done.
-  - iPoseProof (scheduled_adequacy _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
-    iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
-    rewrite run_bind_dist.
-    destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | | ]; try done.
-    +
-      rewrite run_bind_dist. 
-      rewrite run_get_threads.
-      destruct (check_main ts') eqn: E'. 
-      * iSimpl. 
-        iMod "H". iIntros "!> !>". 
-        iApply fupd_nlaters; first set_solver. iMod "H". 
-        apply check_main_head in E'.
-        destruct E' as [ts'' E']. rewrite E'. simpl.
-        iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
-        rewrite wp_unfold /=. done.
-      * iSimpl.
-        iMod "H". iIntros "!> !>".
-        iMod "H". iModIntro.
-        iDestruct "H" as "(% & Hsi' & Hbigop)".
-        pose (Hnil' := non_nil_bigger_than  Hnil H).
-        iApply ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop").
-    + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
-      iApply fupd_nlaters; first set_solver. done.
-    + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
-      iApply fupd_nlaters; first set_solver. done.
-Qed.
+  Proof.
+    iIntros "Hwp Hsi".
+    simpl.
+    destruct ct; simpl.
+    - 
+      iMod (step_expr_adequacy _ _ _ _ ts  with "Hwp Hsi") as "Hexpr".
+      iIntros "!> !>". iMod "Hexpr". iModIntro.
+      simpl. 
+      by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
+    -
+      iMod (step_expr_adequacy _ _ _ _ ts with "Hwp Hsi") as "Hexpr".
+      iIntros "!> !>". iMod "Hexpr". iModIntro.
+      simpl. 
+      by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
+  Qed.
 
+  Lemma mod_lookup_some {A} (l: list A) (i: nat):
+   l ≠ [] -> is_Some (l !! (i mod (length l))).
+  Proof.
+    intro Hnil.
+    apply lookup_lt_is_Some_2. 
+    apply Nat.mod_upper_bound.
+    by destruct l.
+  Qed.
+
+  (*  OK third one up, now there is just one post condition left.
+      Φ for the main thread. All the other threads namely have the trivial
+      post condition
+  *)
+  Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) 
+    (h: heap nat)
+    (s: scheduler nat R)
+    (ts: list (thread nat R))
+    : ts ≠ [] -> 
+    state_interp γ h 
+    -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+    ={⊤, ∅}=∗ 
+     ▷ |={∅, ⊤}=> 
+      match runState (single_step_thread s) h ts with
+      | Here (s', h', ts') => ⌜length ts <= length ts'⌝
+                              ∗ state_interp γ h'
+                              ∗ [∗ list] t ∈ ts', wp_thread (state_interp γ) t Φ
+      | ProgErr => False
+      | EvalErr => True
+      end.
+  Proof.
+    iIntros (Hnil) "HSi Hbigop".
+    unfold single_step_thread. simpl. destruct (schedule s (ts, h)) as [i s'].
+    simpl. 
+    destruct (mod_lookup_some ts i Hnil) as [t Hsome].
+    iDestruct (big_sepL_insert_acc with "Hbigop") as "(Hwpct & Hrestore)"; first done.
+    iMod (step_thread_adequacy _ _ _ _ ts with "Hwpct HSi" ) as "H".
+    iIntros "!> !>".
+    iMod "H". iModIntro.
+    rewrite Hsome /=.  
+    destruct (runState _ h ts) as [[[t' σ'] ts'] | | ]; try done; simpl.
+    iDestruct "H" as (ts'' ->) "(Hwpt' & $ & Hbigop)".
+    iSplit. 
+    - iPureIntro. rewrite insert_length app_length. lia. 
+    - rewrite insert_app_l; last first. 
+      { apply Nat.mod_upper_bound. destruct ts; done. }
+     iFrame.
+     by iApply "Hrestore".
+  Qed.
+
+  Arguments mbind_state : simpl never.
+
+  Lemma run_get_threads {V A} σ (ts: list (thread V A))
+    : runState get_threads σ ts = Here (ts, σ, ts).
+  Proof.
+    done.
+  Qed.
+
+  Lemma non_nil_bigger_than {A} {ts ts' : list A}
+    : ts ≠ [] -> length ts ≤ length ts' -> ts' ≠ [].
+  Proof.
+    intros Hnil Hlength.
+    destruct ts'.
+    -  destruct ts.
+      + done.
+      + simpl in *.
+      pose (Nat.nle_succ_0 _ Hlength). 
+      contradiction.
+    - done. 
+  Qed.
+
+  (*
+    I need the conclusion to say something about how ts can be split up
+  *)
+  Lemma check_main_head {A V: Type} (ts: list (thread V A)) (r: A)
+    : check_main ts = Some r -> ∃ts', ts = (Main $ Answer r) :: ts'.
+    Proof.
+      intro H.
+      destruct ts as [|t ts'].
+      - done.
+      - exists ts'. simpl in *.
+        destruct t.
+        + simpl in *.
+          destruct e; try done.
+          simpl in *.
+          injection H. intro Heq.
+          subst r. done.
+        + done.
+    Qed.
+  (* 
+    Get the iterated update lemma's into their own file,
+    iApply nlaters to introduce them
+    Then use the eqn from check_main to prove that:
+    the first entry in ts' is a Main.
+    That that thread is a Here.
+    Then get the post condition out.
+
+    The modalities seem to misallign here, it looks like
+    it should be iterating |==> ▷ |==>?
+    is that legal? Yes, Yes it is.
+  *)
+  Lemma fuel_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
+    (h: heap nat)
+    (s: scheduler nat R)
+    (ts: list (thread nat R))
+    : ts ≠ [] -> 
+    state_interp γ h
+    -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
+    -∗ Nat.iter n (λ P : iPropI Σ, |={⊤, ∅}=> ▷ |={∅,⊤}=> P) 
+        match runState (eval_threaded n s) h ts with
+        | Here (x, h', ts') => Φ x 
+        | ProgErr => False
+        | EvalErr => True
+        end.
+  Proof.
+    iInduction n as [|n'] "IH" forall (s h ts);
+    iIntros (Hnil) "Hsi Hbigop".
+    - done.
+    - iPoseProof (scheduled_adequacy _ _ _ s  with "Hsi Hbigop" ) as "H"; try done.
+      iEval (unfold eval_threaded). fold (eval_threaded (V := nat) (R := R)).
+      rewrite run_bind_dist.
+      destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | | ]; try done.
+      +
+        rewrite run_bind_dist. 
+        rewrite run_get_threads.
+        destruct (check_main ts') eqn: E'. 
+        * iSimpl. 
+          iMod "H". iIntros "!> !>". 
+          iApply fupd_nlaters; first set_solver. iMod "H". 
+          apply check_main_head in E'.
+          destruct E' as [ts'' E']. rewrite E'. simpl.
+          iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
+          rewrite wp_unfold /=. done.
+        * iSimpl.
+          iMod "H". iIntros "!> !>".
+          iMod "H". iModIntro.
+          iDestruct "H" as "(% & Hsi' & Hbigop)".
+          pose (Hnil' := non_nil_bigger_than  Hnil H).
+          iApply ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop").
+      + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
+        iApply fupd_nlaters; first set_solver. done.
+      + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
+        iApply fupd_nlaters; first set_solver. done.
+  Qed.
 
 End adequacy.
 

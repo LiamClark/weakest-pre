@@ -55,18 +55,6 @@ Proof.
     by iDestruct (bupd_step_bupd with "H'") as "H''".
 Qed.
 
-(* Lemma later_bupdN_soundness' {Σ} (n: nat) (φ: Prop):
-  (Nat.iter n (λ P: iProp Σ, |==> ▷ P) (⌜φ⌝)) -∗ ⌜φ⌝.
-Proof.
-  induction n as [|n IH]; iIntros "H".
-  - by rewrite -bupd_intro -except_0_intro.
-  - rewrite Nat_iter_S. rewrite step_bupd_bupd.
-    iDestruct (IH with "H") as "H'".
-    rewrite !bupd_trans. 
-    by iDestruct (bupd_step_bupd with "H'") as "H''".
-Qed. *)
-
-
 (* The version in fancy updates has an extra bupd around φ does that matter? *)
 (*found in iris/baselogic/lib/fancyupdate *)
 Lemma later_bupdN_soundness {M} (n: nat) (φ: Prop):
@@ -103,8 +91,6 @@ Proof.
   - iModIntro. iNext. iModIntro. done.
 Qed.
 
-(* Search fupd. *)
-
 (* 
   This was convenient but let's cover this with Robbert
 *)
@@ -140,24 +126,6 @@ Proof.
     iDestruct (step_bupdN_plain' with "H'") as "H''".
     iApply bupd_plain.
     iMod "H''". iModIntro. iNext.
-    rewrite -later_laterN laterN_later.
-    iNext. by iMod "H''". 
-Qed.
-
-Lemma later_bupdN_soundness'' {M} (n: nat) (φ: Prop):
-  (⊢@{uPredI M} |==> Nat.iter n (λ P, |==> ▷ |==> P) (⌜φ⌝)) -> φ.
-Proof.
-  intro H.
-  apply (@uPred.soundness M _ (S n)).
-  iPoseProof (H) as "H'".
-  induction n. 
-  - simpl. iNext. 
-    iApply bupd_plain. 
-    done.
-  - 
-    iDestruct (step_bupdN_plain' with "H'") as "H''".
-    iApply bupd_plain.
-    iMod "H''". iMod "H''". iModIntro. iNext.
     rewrite -later_laterN laterN_later.
     iNext. by iMod "H''". 
 Qed.
