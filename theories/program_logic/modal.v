@@ -103,6 +103,20 @@ Proof.
   - iModIntro. iNext. iModIntro. done.
 Qed.
 
+(* Search fupd. *)
+
+(* 
+  This was convenient but let's cover this with Robbert
+*)
+Lemma fupd_nlaters {Σ} `{!invG Σ} (n: nat) (E1 E2: coPset) (Q: iProp Σ):
+  E2 ⊆ E1 ->
+  Q ⊢ Nat.iter n (λ P : iPropI Σ, |={E1, E2}=> ▷ |={E2, E1}=> P) Q.
+Proof.
+  iIntros (Hsub) "Q".
+  iApply step_fupdN_intro; first done.
+  by iApply laterN_intro.
+Qed.
+
 Lemma step_bupdN_plain' {M} n (φ: Prop): 
   (⊢@{uPredI M}(Nat.iter n (λ P, |==> ▷ |==> P) ⌜φ⌝) ==∗ ▷^n ◇ ⌜φ⌝).
 Proof.

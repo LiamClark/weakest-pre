@@ -32,9 +32,9 @@ Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop
  3. where is the notation defined.
 *)
 
-Locate "|={ _ }=> _".
-Locate "|={ _ , _ }=> _".
-Check fupd.
+(* Locate "|={ _ }=> _". *)
+(* Locate "|={ _ , _ }=> _". *)
+(* Check fupd. *)
 (* 
   A fupd with one mask simply keeps the same mask.
   A fupd with two masks goes from mask one to mask two.
@@ -52,7 +52,7 @@ Check fupd.
   Let me try proving a fancy update rule to see what I need.
 *)
 
-Search FUpd.
+(* Search FUpd. *)
 Definition wp_pre {V} (SI: gmap loc V -> iProp Σ)
      (go: discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
      discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
@@ -111,13 +111,13 @@ Proof.
   by rewrite wp_unfold.
 Qed.
 
-Locate "|={ _ }[ _ ]▷=>".
-Locate "|={ _ }[ _ ]▷=> _".
+(* Locate "|={ _ }[ _ ]▷=>". *)
+(* Locate "|={ _ }[ _ ]▷=> _". *)
 (* on newer versions of Iris *)
-Check fupd_mask_intro. 
+(* Check fupd_mask_intro.  *)
 
 (* Check fupd_intro_mask. *)
-Check fupd_mask_weaken.
+(* Check fupd_mask_weaken. *)
 
 (* ||={E1} P -∗ |={E1,E2}=> P *)
 Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
@@ -159,7 +159,7 @@ Proof.
 Qed.
 
 
-Print uPred_fupd.
+(* Print uPred_fupd. *)
 Lemma wp_vup {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ: R -> iProp Σ)
   : (|={E}=> wp SI E e (λ v, |={E}=> Φ v)) ⊢ wp SI E e Φ.
@@ -221,7 +221,7 @@ Proof.
 Qed.
 
 
-Check fupd_mask_mono.
+(* Check fupd_mask_mono. *)
 Lemma wp_strong_mono_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
   : E1 ⊆ E2 -> wp SI E1 e Φ -∗ (∀ v, Φ v ={E2}=∗ Ψ v) -∗ wp SI E2 e Ψ.
@@ -548,7 +548,7 @@ End heap_wp.
 
 
 Section adequacy.
- Context `{! inG Σ (heapR natO)}.
+ Context `{!inG Σ (heapR natO)}.
  Context`{!invG Σ}. 
 (*
   Ok what does this bugger say again?
@@ -798,6 +798,10 @@ Proof.
       iApply fupd_nlaters; first set_solver. done.
 Qed.
 
+
+End adequacy.
+
+
 (*
   So what needs to happen here?
   1. I need to be in an iris context to use fuel_adequacy
@@ -818,11 +822,11 @@ Qed.
      let's lift that.
      Now I need to get it in a big op
 *)
-Lemma adequacy {R} (φ: R -> Prop) (n: nat) 
+Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invPreG Σ} {R} (φ: R -> Prop) (n: nat) 
   (SI: gmap nat nat -> iProp Σ)
   (s: scheduler nat R)
   (e: expr nat R)
-  : (∀ γ, ⊢ wp (state_interp γ) ⊤ e (λ x, ⌜φ x⌝)) ->
+  : (∀ `{!invG Σ} γ, ⊢ wp (state_interp γ) ⊤ e (λ x, ⌜φ x⌝)) ->
   match run_program n s e with
   | Here x => φ x
   | ProgErr => False
@@ -832,22 +836,17 @@ Lemma adequacy {R} (φ: R -> Prop) (n: nat)
     intros Hpre.
     unfold run_program.
     apply (step_fupdN_soundness' _ (S n)). simpl. iIntros (inv).
-    (* apply (@later_bupdN_soundness'' (iResUR Σ) n). *)
     iMod (own_alloc (● (lift_excl ∅))) as (γ) "Hsi".
     { by apply auth_auth_valid. }
     iApply fupd_mask_intro; first set_solver. iIntros "Hclose".
     iModIntro. iMod "Hclose". iModIntro.
-    iDestruct (Hpre γ) as "Hwp". 
+    iDestruct (Hpre inv γ) as "Hwp". 
     iPoseProof (fuel_adequacy _ _ n  _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
-    destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl.
-    - iAssumption.  done.
-    -
-    -
-  Qed.
+    destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl; done.
+Qed.
 
 Print Assumptions adequacy.
 
-End adequacy.
 (* 
   1. fancy update modality.
   2. CmpSwp primitive?
