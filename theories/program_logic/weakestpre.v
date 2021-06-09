@@ -124,7 +124,7 @@ Section state_wp.
 
 End state_wp.
 
-Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
 
 
 
@@ -172,7 +172,7 @@ Section state_wp_gp.
     unfold points_to.
     iDestruct (own_valid_2 with "Hsi Hpt") as "%".
     pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
     destruct (a H) as [H1 H2].
     iPureIntro.
     pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
@@ -315,13 +315,18 @@ Set Printing Coercions.
     y ← get k ;
     put l y ;; put k x.
 
+  Definition prog_swap' (l k: nat): state (gmap nat nat) unit := 
+    get l ≫= λ x,
+      get k ≫= λ y,  
+        put l y ;; put k x.
+
   (*for linked lists 
     https://gitlab.mpi-sws.org/iris/stdpp/-/blob/master/theories/countable.v#L21
   *)
   Lemma swap_verif l k x y :
    ∀γ Φ, points_to γ l x ∗ points_to γ k y -∗ 
        (points_to γ l y ∗ points_to γ k x -∗ Φ tt) -∗
-       state_wp (state_interp γ) (prog_swap l k) Φ. 
+       state_wp (state_interp γ) (prog_swap' l k) Φ. 
   Proof.
     iIntros (γ Φ) "Hpre Hpost".
     unfold prog_swap. 

@@ -2,7 +2,7 @@ From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
-From shiris.program_logic Require Import delaystate.
+From shiris.program_logic Require Import modal delaystate. 
 Set Default Proof Using "Type".
 
 (*
@@ -133,102 +133,6 @@ Proof.
   iIntros "Hwp".
   iApply (wp_strong_mono_delay with "Hwp").
   auto.
-Qed.
-
-From iris.bi Require Import derived_laws_later plainly.
-Import derived_laws_later.bi.
-
-Lemma step_bupd_bupd {M} φ:
-  ((|==> ▷ φ) ⊢@{uPredI M} |==> ▷ |==> φ).
-Proof.
-  iIntros "H".
-  iMod "H" as "H'". 
-  iModIntro.
-  by rewrite -bupd_intro.
-Qed.
-
-Lemma bupd_plain_later {M} (φ: Prop):
-  (⊢@{uPredI M} (▷ |==> ⌜φ⌝) ==∗ ▷ ◇ ⌜φ⌝).
-Proof.
-  iIntros "H".
-  iModIntro. iNext.
-  iApply bupd_plain. 
-  by iMod "H" as "H'".
-Qed.
-
-Lemma step_bupd_plain {M} φ `{!Plain φ}:
-  (⊢@{uPredI M} (|==> ▷ φ) ==∗ ▷ ◇ φ).
-Proof.
-  iIntros "H".
-  iMod "H" as "H'".
-  iModIntro. iNext.
-  done.
-Qed.
-
-Lemma bupd_step_bupd {M} n φ:
-  (⊢@{uPredI M} (|==> ▷ (|==> ▷^n ◇ ⌜φ⌝)) -∗ (|==> ▷ ▷^n ◇ ⌜φ⌝)) .
-Proof.
-  iIntros "H".
-  iMod "H" as "H". iModIntro. iNext.
-  by iApply bupd_plain.
-Qed.
-
-Lemma step_bupdN_plain {M} n (φ: Prop): 
-  (⊢@{uPredI M}(Nat.iter n (λ P, |==> ▷ P) ⌜φ⌝) ==∗ ▷^n ◇ ⌜φ⌝).
-Proof.
-  induction n as [|n IH]; iIntros "H".
-  - by rewrite -bupd_intro -except_0_intro.
-  - rewrite Nat_iter_S. rewrite step_bupd_bupd.
-    iDestruct (IH with "H") as "H'".
-    rewrite !bupd_trans. 
-    by iDestruct (bupd_step_bupd with "H'") as "H''".
-Qed.
-
-(* Lemma later_bupdN_soundness' {Σ} (n: nat) (φ: Prop):
-  (Nat.iter n (λ P: iProp Σ, |==> ▷ P) (⌜φ⌝)) -∗ ⌜φ⌝.
-Proof.
-  induction n as [|n IH]; iIntros "H".
-  - by rewrite -bupd_intro -except_0_intro.
-  - rewrite Nat_iter_S. rewrite step_bupd_bupd.
-    iDestruct (IH with "H") as "H'".
-    rewrite !bupd_trans. 
-    by iDestruct (bupd_step_bupd with "H'") as "H''".
-Qed. *)
-
-
-(* The version in fancy updates has an extra bupd around φ does that matter? *)
-(*found in iris/baselogic/lib/fancyupdate *)
-Lemma later_bupdN_soundness {M} (n: nat) (φ: Prop):
-  (⊢@{uPredI M} Nat.iter n (λ P, |==> ▷ P) (⌜φ⌝)) -> φ.
-Proof.
-  intro H.
-  apply (@uPred.soundness M _ (S n)).
-  iPoseProof (H) as "H'".
-  induction n. 
-  - done.
-  - 
-    iDestruct (step_bupdN_plain with "H'") as "H''".
-    iApply bupd_plain.
-    iMod "H''" as "H''". iModIntro. iNext.
-    rewrite -later_laterN laterN_later.
-    iNext. by iMod "H''". 
-Qed.
-
-Lemma nlaters {Σ} (n: nat) (Q: iProp Σ):
- Q ⊢ Nat.iter n (λ P : iPropI Σ, |==> ▷ P) Q.
-Proof.
-  iIntros "Q".
-  induction n.
-  - done.
-  - iModIntro. iNext. done.
-Qed.
-
-Print Transitive.
-Lemma lift_entails {Σ} (P Q: iProp Σ): (P ⊢ Q) -> ((⊢ P) -> (⊢ Q)).
-Proof.
-  unfold bi_emp_valid.
-  intros H H2.
-  by trans P.
 Qed.
 
 Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
@@ -391,7 +295,7 @@ Qed.
 End state_wp.
 
 (*Heap rules *)
-Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
 
 Lemma fresh_none (σ: gmap nat nat): 
   let l := fresh (dom (gset nat) σ)
@@ -432,7 +336,7 @@ Section state_wp_gp.
     unfold state_interp. unfold points_to.
     iDestruct (own_valid_2 with "Hsi Hpt") as "%".
     pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
     destruct (a H) as [H1 H2].
     iPureIntro.
     pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).

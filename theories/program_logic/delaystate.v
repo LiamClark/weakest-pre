@@ -20,7 +20,7 @@ Definition TBind {A B} (f: A -> delay B): ∀ (ma: delay A), delay B :=
     | Answer x => f x
     | Think ma' => Think (go ma')
     end.
-Print TBind.
+(* Print TBind. *)
 
 Instance mbind_delay : MBind delay := 
   λ _ _ f ma, TBind f ma.
