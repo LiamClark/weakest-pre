@@ -315,13 +315,18 @@ Set Printing Coercions.
     y ← get k ;
     put l y ;; put k x.
 
+  Definition prog_swap' (l k: nat): state (gmap nat nat) unit := 
+    get l ≫= λ x,
+      get k ≫= λ y,  
+        put l y ;; put k x.
+
   (*for linked lists 
     https://gitlab.mpi-sws.org/iris/stdpp/-/blob/master/theories/countable.v#L21
   *)
   Lemma swap_verif l k x y :
    ∀γ Φ, points_to γ l x ∗ points_to γ k y -∗ 
        (points_to γ l y ∗ points_to γ k x -∗ Φ tt) -∗
-       state_wp (state_interp γ) (prog_swap l k) Φ. 
+       state_wp (state_interp γ) (prog_swap' l k) Φ. 
   Proof.
     iIntros (γ Φ) "Hpre Hpost".
     unfold prog_swap. 

@@ -27,7 +27,7 @@ Definition TBind {A B} (f: A -> delay B): ∀ (ma: delay A), delay B :=
     | Answer x => f x
     | Think ma' => Think (go ma')
     end.
-Print TBind.
+(* Print TBind. *)
 
 CoFixpoint iter {A B} (body: A -> delay (A + B)) : A -> delay B.
 refine (λ a, TBind(λ ab,
@@ -220,7 +220,7 @@ End computation.
 Arguments run {A}.
 Arguments runTo {A}.
 
-Locate "¬".
+(* Locate "¬". *)
 Section Bottom.
   Variable A: Type.
 
@@ -306,8 +306,8 @@ Section Bind.
       discriminate.
   Defined.
 
-  Locate "≥".
-  Print ge.
+  (* Locate "≥". *)
+  (* Print ge. *)
   Lemma run_bind (v1: A) (v2: B):
     run m1 v1
     -> run (m2 v1) v2
@@ -356,7 +356,7 @@ Section Fix.
     | S n' => f (Fix' n') x
     end.
 
-  SearchAbout le.
+  (* SearchAbout le. *)
 
   (* If fix succeeds for a n it should succeed for a bigger n' *)
   Lemma Fix'_ok steps n x v:

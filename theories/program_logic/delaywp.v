@@ -223,7 +223,7 @@ Proof.
   - iModIntro. iNext. done.
 Qed.
 
-Print Transitive.
+(* Print Transitive. *)
 Lemma lift_entails {Σ} (P Q: iProp Σ): (P ⊢ Q) -> ((⊢ P) -> (⊢ Q)).
 Proof.
   unfold bi_emp_valid.
@@ -391,7 +391,7 @@ Qed.
 End state_wp.
 
 (*Heap rules *)
-Definition heapR (A: ofeT): cmraT := authR (gmapUR nat (exclR A)).
+Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
 
 Lemma fresh_none (σ: gmap nat nat): 
   let l := fresh (dom (gset nat) σ)
@@ -432,7 +432,7 @@ Section state_wp_gp.
     unfold state_interp. unfold points_to.
     iDestruct (own_valid_2 with "Hsi Hpt") as "%".
     pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid cmr _ (lift_excl σ) ({[n := Excl v]}))).
+    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
     destruct (a H) as [H1 H2].
     iPureIntro.
     pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).

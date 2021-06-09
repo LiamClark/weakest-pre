@@ -71,7 +71,7 @@ Proof.
     - by destruct H.
 Qed.
 
-SearchAbout plus.
+(* SearchAbout plus. *)
 Lemma coq_fib_move n1 n2 n:
  coq_fib n2 (n1 + n2) (S n) = coq_fib n1 n2 (S (S n)).
 Proof.

@@ -290,7 +290,7 @@ Definition prog_scheduler {V R: Type} := (@list_scheduler V R [0; 0; 5 ] 0).
 Definition dump_heap {A B C} (x: A * B * C): (A * C) :=
   (x.1.1, x.2).
 
-Check (runState (single_step_thread prog_scheduler) ∅ [Main prog]).
+(* Check (runState (single_step_thread prog_scheduler) ∅ [Main prog]). *)
 
 Definition steps {V R}: state V R (scheduler V R).
 refine( 
