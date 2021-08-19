@@ -4,12 +4,22 @@ From shiris.program_logic Require Import delaystate.
 From shiris.program_logic Require Import delaywp.
 
 (*Example programs *)
-Definition fib' (st: nat * nat * nat): delay ((nat * nat * nat) + nat).
-refine (match st with
-|(0, x, y) => Answer $ inr $ x
-|((S n), x, y) => Answer $ inl (n, y, x + y)
-end).
-Defined.
+(* 
+  fib' is our loop body.
+  st is the state that we use between iterations of our computation.
+  it's components are: (n, x, y) where
+  n is the amount of fibonacci numbers we still need to create,
+   once we reach 0 we yield our result.
+  x is the current number
+  y is the next number
+
+  now why do we yield x and not y>
+*)
+Definition fib' (st: nat * nat * nat): delay ((nat * nat * nat) + nat) :=
+    match st with
+    |(0, x, y) => Answer $ inr $ x 
+    |((S n), x, y) => Answer $ inl (n, y, x + y)
+    end.
 
 Definition fib (n: nat): delay nat := delaystate.iter fib' (n, 0, 1).
 
@@ -21,12 +31,12 @@ Qed.
 (* 
     What is the intuition behind this?
 *)
-Fixpoint coq_fib (n1 n2: nat) (n: nat): nat :=
+Fixpoint coq_fib (a b: nat) (n: nat): nat :=
     match n with
-    |O => n1
+    |O => a 
     |S n' => match n' with
-             | O => n2 
-             | S n'' => (coq_fib n1 n2 n') + (coq_fib n1 n2 n'')
+             | O => b 
+             | S n'' => (coq_fib a b n') + (coq_fib a b n'')
              end
     end.
 
@@ -71,44 +81,37 @@ Proof.
     - by destruct H.
 Qed.
 
-(* SearchAbout plus. *)
+
 Lemma coq_fib_move n1 n2 n:
- coq_fib n2 (n1 + n2) (S n) = coq_fib n1 n2 (S (S n)).
+ coq_fib n2 (n1 + n2) n = coq_fib n1 n2 (S n).
 Proof.
     induction n using pair_induction.
     - by rewrite Nat.add_comm.
     - by rewrite Nat.add_comm.
-    - rewrite -> (coq_fib_unfold  n1 n2 (S (S (n)))).
+    - rewrite -> (coq_fib_unfold  n1 n2 (S (n))).
       rewrite <- IHn0.
       rewrite <- IHn.
       rewrite -> coq_fib_unfold.
       reflexivity.
 Qed.
 
-Lemma coq_fib_move' n1 n2 n:
- coq_fib n2 (n1 + n2) n = coq_fib n1 n2 (S n).
- Proof.
-     destruct n.
-     + done.
-     + apply coq_fib_move.
- Qed.
 
 (* To get lob induction to work I need the numbers that are passed
     between loop states to vary. but then my post condition does
     not always hold that needs to be generalized too.
 *)
-Lemma verify_delay_fib' n1 n2 n:
-    ⊢ wp_delay (delaystate.iter fib' (n, n1, n2)) (post' n1 n2 n).
+Lemma verify_delay_fib' x y n:
+    ⊢ wp_delay (delaystate.iter fib' (n, x, y)) (post' x y n).
 Proof.
-    iLöb as "IH" forall (n n1 n2).
+    iLöb as "IH" forall (n x y).
     iApply wp_delay_iter. 
     destruct n as [| n'] eqn: E.
-    - iApply wp_delay_return. done.
+    - iApply wp_delay_return.  simpl. unfold post'.  simpl. done.
     - iApply wp_delay_return. simpl. 
       iNext.
       iApply (wp_strong_mono_delay with "IH").
       iIntros (v Hv) "!%". subst v.
-      apply coq_fib_move'.
+      apply coq_fib_move.
 Qed.
 
 Lemma verify_delay_fib n:
@@ -146,7 +149,7 @@ Proof.
      iSpecialize ("IH" with "Hl1 Hl2").
      iApply (wp_strong_mono with "IH").
      iIntros (v Hv) "!%". subst v.
-     apply coq_fib_move'.
+     apply coq_fib_move.
 Qed.
 
 Definition fib_state (n: nat): state_delay (gmap nat nat) nat := 
