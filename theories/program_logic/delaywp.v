@@ -514,3 +514,54 @@ Section state_delay_adequacy.
     - by apply eval_state_eval_delay.
   Qed. 
 End state_delay_adequacy.
+
+Definition hoare_delay {Σ} {A} (P: iProp Σ) (e: delay A) (Q: A -> iProp Σ): iProp Σ
+:= □ (P -∗ wp_delay e Q).
+
+(*{P} e {Q} =  □(P -* wp e {Q}) *)
+
+(*
+Lemma wp_delay_think {Σ A}(e: delay A) (Φ: A -> iProp Σ): ▷ wp_delay e Φ -∗ wp_delay (Think e) Φ.
+*)
+(*
+  persistent hypothesis can be moved between the hoare pre condition and the context
+  hoare_ctx
+*)
+Lemma hoare_delay_think {Σ A}(e: delay A) (P: iProp Σ) (Q: A -> iProp Σ):
+   hoare_delay P e Q -∗
+   hoare_delay (▷ P) (Think e) Q.
+Proof.
+  iIntros "#Hhoare !>".
+  unfold hoare_delay.
+  iIntros "Hp".
+  iApply wp_delay_think.
+  iNext.
+  iApply ("Hhoare" with "Hp").
+Qed.
+
+(*
+Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
+  (x: A)
+  (f: A -> delay (A + B)):
+  wp_delay (f x) (case_ (λ x, ▷ wp_delay (iter f x) Φ) Φ) -∗
+  wp_delay (iter f x) Φ.
+*)
+
+Lemma hoare_delay_iter {Σ A B} (P: iProp Σ) (Q: A -> iProp Σ)
+  (R: B -> iProp Σ)
+  (x: A)
+  (f: A -> delay (A + B)):
+  (* hoare_delay P (f x) (case_ (λ x, ▷ hoare_delay P (iter f x) R) R) -∗ *)
+  hoare_delay P (f x) (case_ (λ x, ▷ Q x) R) -∗
+  (∀ a, hoare_delay (Q a) (delaystate.iter f a) R ) -∗
+  hoare_delay P (delaystate.iter f x) R.
+Proof.
+  iIntros "#Hhf #Hhiter !> HP".
+  iApply wp_delay_iter.
+  iApply (wp_strong_mono_delay with "(Hhf HP)").
+  iIntros (ab) "Hpost".
+  iModIntro.
+  destruct ab; simpl.
+  - iNext. iApply ("Hhiter" with "Hpost").
+  - done.
+Qed.
