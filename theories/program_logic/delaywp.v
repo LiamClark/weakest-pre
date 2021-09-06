@@ -551,7 +551,6 @@ Lemma hoare_delay_iter {Σ A B} (P: iProp Σ) (Q: A -> iProp Σ)
   (R: B -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
-  (* hoare_delay P (f x) (case_ (λ x, ▷ hoare_delay P (iter f x) R) R) -∗ *)
   hoare_delay P (f x) (case_ (λ x, ▷ Q x) R) -∗
   (∀ a, hoare_delay (Q a) (delaystate.iter f a) R ) -∗
   hoare_delay P (delaystate.iter f x) R.
@@ -564,4 +563,33 @@ Proof.
   destruct ab; simpl.
   - iNext. iApply ("Hhiter" with "Hpost").
   - done.
+Qed.
+
+Search Persistent.
+About Persistent.
+Locate "□".
+
+Lemma hoare_delay_ctx {Σ A} (P Q: iProp Σ) `{!Persistent Q}
+  (R: A -> iProp Σ)
+  (e: delay A):
+  hoare_delay (P ∗ Q) e R -∗
+  (Q -∗ hoare_delay P e R).
+Proof.
+  iIntros "#Hpq #Hq !> Hp".
+  iDestruct "Hq" as "-#Hq". 
+  iApply ("Hpq" with "[$]"). 
+Qed.
+
+Lemma hoare_lob {Σ A B} (P : B -> iProp Σ) (Q : B -> A -> iProp Σ)
+  (e: B -> delay A):
+  (∀x: B, hoare_delay (P x ∗ ▷ (∀x : B, hoare_delay (P x) (e x) (Q x))) (e x) (Q x)) -∗
+  ∀x: B, hoare_delay (P x) (e x) (Q x).
+Proof.
+  iIntros "#Hpq".
+  iLöb as "IH".
+  iIntros (x).
+  iDestruct ("Hpq" $! x) as "#Hpq'".
+  iIntros "!> Hp".
+  iApply "Hpq'". 
+  iFrame. iNext. iApply "IH".
 Qed.
