@@ -53,8 +53,8 @@ Qed.
 Section state_ad.
 Context `{! inG Σ (heapR natO)}.
 
-Definition post' (n1 n2 n: nat) (ret: nat): iProp Σ.
-refine( ⌜ret = coq_fib n1 n2 n⌝%I).
+Definition post' (a b n: nat) (ret: nat): iProp Σ.
+refine( ⌜ret = coq_fib a b n⌝%I).
 Defined.
 
 Definition post (n ret: nat): iProp Σ := post' 0 1 n ret.
@@ -95,7 +95,6 @@ Proof.
       reflexivity.
 Qed.
 
-
 (* To get lob induction to work I need the numbers that are passed
     between loop states to vary. but then my post condition does
     not always hold that needs to be generalized too.
@@ -106,12 +105,26 @@ Proof.
     iLöb as "IH" forall (n x y).
     iApply wp_delay_iter. 
     destruct n as [| n'] eqn: E.
-    - iApply wp_delay_return.  simpl. unfold post'.  simpl. done.
+    - unfold fib'. iApply wp_delay_return.  simpl. unfold post'.  simpl. done.
     - iApply wp_delay_return. simpl. 
       iNext.
       iApply (wp_strong_mono_delay with "IH").
       iIntros (v Hv) "!%". subst v.
       apply coq_fib_move.
+Qed.
+
+
+Check curry3.
+Lemma verify_delay_hoare_fib' x y n:
+    ⊢ hoare_delay True (delaystate.iter fib' (n, x, y)) (post' x y n).
+Proof.
+    iLöb as "IH" forall (n x y).
+    iApply (hoare_delay_iter _ (λ '(n',x',y'), post' n' x' y' _)). destruct n as [| n'] eqn: E.
+    - simpl.  iApply hoare_delay_mret'. iIntros "!> _".
+      done.
+    - simpl. iApply hoare_delay_mret'. iIntros "!> _". simpl.
+    -
+    -
 Qed.
 
 Lemma verify_delay_fib n:

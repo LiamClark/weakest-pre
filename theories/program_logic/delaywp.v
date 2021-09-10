@@ -527,7 +527,7 @@ Lemma wp_delay_think {Σ A}(e: delay A) (Φ: A -> iProp Σ): ▷ wp_delay e Φ -
   persistent hypothesis can be moved between the hoare pre condition and the context
   hoare_ctx
 *)
-Lemma hoare_delay_think {Σ A}(e: delay A) (P: iProp Σ) (Q: A -> iProp Σ):
+Lemma hoare_delay_think {Σ A} (e: delay A) (P: iProp Σ) (Q: A -> iProp Σ):
    hoare_delay P e Q -∗
    hoare_delay (▷ P) (Think e) Q.
 Proof.
@@ -538,6 +538,51 @@ Proof.
   iNext.
   iApply ("Hhoare" with "Hp").
 Qed.
+
+(* 
+  So this one is true, but is it usable?
+*)
+Lemma hoare_delay_mret {Σ A} (x: A) (P: iProp Σ) (Q: A -> iProp Σ):
+  ⊢ @hoare_delay Σ A True (Answer x) (λ w, ⌜w = x⌝).
+Proof.
+  unfold hoare_delay.
+  iIntros "!> _".
+  by iApply wp_delay_return.
+Qed.
+
+Lemma hoare_delay_mret' {Σ A} (x: A) (Q: iProp Σ) (P: A -> iProp Σ):
+  □(Q -∗ P x) -∗
+  hoare_delay Q (Answer x) P.
+Proof.
+  unfold hoare_delay.
+  iIntros "#Hwand !> Hp".
+  iApply wp_delay_return. 
+  by iApply "Hwand".
+Qed.
+
+Lemma hoare_delay_consequence {Σ A} (P P': iProp Σ) (Q Q': A -> iProp Σ)
+  (e: delay A)
+  : □(P' -∗ P) -∗ □(∀x, Q x -∗ Q' x) -∗
+  hoare_delay P e Q -∗
+  hoare_delay P' e Q'.
+Proof.
+  iIntros "#Hp #Hq #Hhd".
+  iIntros "!> HP'".
+  iDestruct "Hhd"
+
+
+Qed.
+
+
+(* not provable due to the persistence modality?*)
+(* Lemma hoare_delay_mret'' {Σ A} (x: A) (P: A -> iProp Σ):
+  P x -∗ @hoare_delay Σ A (True) (Answer x) P.
+Proof.
+  unfold hoare_delay.
+  iIntros "Hp !>".
+  by iApply wp_delay_return.
+Qed. *)
+
 
 (*
 Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
@@ -564,10 +609,6 @@ Proof.
   - iNext. iApply ("Hhiter" with "Hpost").
   - done.
 Qed.
-
-Search Persistent.
-About Persistent.
-Locate "□".
 
 Lemma hoare_delay_ctx {Σ A} (P Q: iProp Σ) `{!Persistent Q}
   (R: A -> iProp Σ)
