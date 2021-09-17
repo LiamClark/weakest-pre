@@ -848,13 +848,4 @@ Print Assumptions adequacy.
 (* 
   1. fancy update modality.
   2. CmpSwp primitive?
-  
-  CmpSwp 
-
-  adequacy statement : voor alle schedelures alle initieele heaps.
-  - Als het interpret naar een value in een aantal stappen
-  - En er is een wp voor die expressie
-  - Dan krijgen we die pure post conditie er uit.
-  - En het programma loopt af.
-  - 
-*)
+*) 

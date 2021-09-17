@@ -13,20 +13,22 @@ Arguments Think {_}.
 (* Using the cofix to extract all parameters that are constant throughout the recursion
    Is crucial in having the guardness check work for loop and iter.
 *)
-Definition delay_bind {A B} (f: A -> delay B): ∀ (ma: delay A), delay B :=
-  cofix go (ma : delay A) : 
-  delay B :=
+Definition delay_bind {A B} (f: A -> delay B): delay A -> delay B :=
+  cofix go (ma : delay A): delay B :=
     match ma with
     | Answer x => f x
     | Think ma' => Think (go ma')
     end.
 
+Instance mret_delay : MRet delay := λ _ x, Answer x.
+
 Instance mbind_delay : MBind delay := 
   λ _ _ f ma, delay_bind f ma.
 
+
 Instance fmap_delay : FMap delay := 
   λ A B f ma,
-        ma ≫= Answer ∘ f.
+        ma ≫= compose Answer f.
 
 
 (* Coproduct lifting operations
@@ -43,6 +45,12 @@ refine(λ ab,  match ab with
 ).
 Defined.
 
+CoFixpoint iter' {A B} (f: A -> delay (A + B)) : A -> delay B :=
+ λ x, ab ← f x ;
+        match ab with
+        | inl a => Think (iter' f a)
+        | inr b => Answer b
+        end.
 
 CoFixpoint iter {A B} (f: A -> delay (A + B)) : A -> delay B.
 refine (delay_pipe f ( case_ (Think ∘ iter _ _ f) Answer)).
