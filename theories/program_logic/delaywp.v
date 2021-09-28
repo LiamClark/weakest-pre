@@ -567,10 +567,11 @@ Lemma hoare_delay_consequence {Σ A} (P P': iProp Σ) (Q Q': A -> iProp Σ)
   hoare_delay P' e Q'.
 Proof.
   iIntros "#Hp #Hq #Hhd".
-  iIntros "!> HP'".
-  iDestruct "Hhd"
-
-
+  iIntros "!> Hp'".
+  iDestruct ("Hp" with "Hp'") as "Hp'".
+  iDestruct ("Hhd" with "Hp'") as "Hhd'".
+  iApply (wp_strong_mono_delay with "Hhd'"). iIntros (v) "Hqv".
+  by iApply "Hq".
 Qed.
 
 
