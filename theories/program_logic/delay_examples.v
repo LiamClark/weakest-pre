@@ -62,8 +62,8 @@ Qed.
 Section delay_verif.
   Context `{! inG Σ (heapR natO)}.
   
-  Definition post' (a b n: nat) (ret: nat): iProp Σ.
-  refine( ⌜ret = coq_fib a b n⌝%I).
+  Definition post' (x y n: nat) (ret: nat): iProp Σ.
+  refine( ⌜ret = coq_fib x y n⌝%I).
   Defined.
   
   Definition post (n ret: nat): iProp Σ := post' 0 1 n ret.
@@ -112,8 +112,7 @@ Section delay_verif.
       ⊢ wp_delay (delaystate.iter fib' (n, x, y)) (post' x y n).
   Proof.
       iLöb as "IH" forall (n x y).
-      iApply wp_delay_iter. 
-      destruct n as [| n'] eqn: E.
+      iApply wp_delay_iter. destruct n as [| n'] eqn: E.
       - unfold fib'. iApply wp_delay_return.  simpl. unfold post'.  simpl. done.
       - iApply wp_delay_return. simpl. 
         iNext.
@@ -128,12 +127,23 @@ Section delay_verif.
       ⊢ hoare_delay True (delaystate.iter fib' (n, x, y)) (post' x y n).
   Proof.
       iLöb as "IH" forall (n x y).
-      iApply (hoare_delay_iter _ (λ '(n',x',y'), post' n' x' y' _)). destruct n as [| n'] eqn: E.
+      iApply (hoare_delay_iter _ 
+        (λ '(n',x',y'), hoare_delay True (delaystate.iter fib' (n', x', y')) (post' x y n))
+        ).
+       destruct n as [| n'] eqn: E.
+      (* iApply (hoare_delay_iter _ _). destruct n as [| n'] eqn: E. *)
       - simpl.  iApply hoare_delay_mret'. iIntros "!> _".
         done.
       - simpl. iApply hoare_delay_mret'. iIntros "!> _". simpl.
-      -
-      -
+        iNext.
+        iApply (hoare_delay_consequence True _); try done.
+        iIntros "!>" (res H). iPureIntro. subst res. apply coq_fib_move.
+      - iIntros (res).
+        iApply (hoare_delay_consequence_l (True ∗ _)).
+        + iIntros "!> H". iSplit. done. iApply "H".
+        + iApply (hoare_delay_ctx' True _).
+          iIntros "!> Hhd". destruct res as [[n' y'] x'] eqn: E.
+          done.
   Qed.
   
   Lemma verify_delay_fib n:

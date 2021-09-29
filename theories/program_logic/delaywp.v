@@ -574,6 +574,17 @@ Proof.
   by iApply "Hq".
 Qed.
 
+Lemma hoare_delay_consequence_l {Σ A} (P P': iProp Σ) (Q: A -> iProp Σ)
+  (e: delay A)
+  : □(P' -∗ P) -∗
+  hoare_delay P e Q -∗
+  hoare_delay P' e Q.
+Proof.
+  iIntros "#Hp #Hq".
+  iIntros "!> Hp'".
+  iDestruct ("Hp" with "Hp'") as "Hp'".
+  by iApply "Hq".
+Qed.
 
 (* not provable due to the persistence modality?*)
 (* Lemma hoare_delay_mret'' {Σ A} (x: A) (P: A -> iProp Σ):
@@ -620,6 +631,17 @@ Proof.
   iIntros "#Hpq #Hq !> Hp".
   iDestruct "Hq" as "-#Hq". 
   iApply ("Hpq" with "[$]"). 
+Qed.
+
+Lemma hoare_delay_ctx' {Σ A} (P Q: iProp Σ) 
+  (R: A -> iProp Σ)
+  (e: delay A):
+  □(Q -∗ hoare_delay P e R) -∗
+  hoare_delay (P ∗ Q) e R. 
+Proof.
+  iIntros "#Hqhd !> (Hp & Hq)".
+  iDestruct ("Hqhd" with "Hq") as "#Hphd".
+  by iApply "Hphd".
 Qed.
 
 Lemma hoare_lob {Σ A B} (P : B -> iProp Σ) (Q : B -> A -> iProp Σ)
