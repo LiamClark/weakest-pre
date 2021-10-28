@@ -45,8 +45,6 @@ Definition put {V} (l: loc) (v: V): expr V () := Vis (PutE l v) Answer .
 Definition alloc {V} (v: V): expr V loc := Vis (AllocE v) Answer.
 Definition free {V} (l: loc): expr V () := Vis (FreeE l) Answer.
 
-
-
 (* Apply the continuation k to the Ret nodes of the itree t *)
 Instance itree_bind {E}: MBind (itree E) := λ R S k, 
     cofix go u := match u with

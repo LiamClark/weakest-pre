@@ -609,7 +609,7 @@ Lemma hoare_delay_iter {Σ A B} (P: iProp Σ) (Q: A -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
   hoare_delay P (f x) (case_ (λ x, ▷ Q x) R) -∗
-  (∀ a, hoare_delay (Q a) (delaystate.iter f a) R ) -∗
+  ▷ (∀ a, hoare_delay (Q a) (delaystate.iter f a) R ) -∗
   hoare_delay P (delaystate.iter f x) R.
 Proof.
   iIntros "#Hhf #Hhiter !> HP".

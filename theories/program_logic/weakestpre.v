@@ -341,6 +341,23 @@ Set Printing Coercions.
     iApply ("Hpost" with "*").
     iFrame.
     Qed.
+
+  Lemma swap_verif' l k x y :
+   ∀γ, points_to γ l x ∗ points_to γ k y -∗ 
+       state_wp (state_interp γ) (prog_swap' l k) (λ _, points_to γ l y ∗ points_to γ k x). 
+  Proof.
+    iIntros (γ) "Hpre".
+    unfold prog_swap. 
+    iDestruct "Hpre" as "(Hlx & Hky)".
+    iApply wp_bind.
+    iApply (wp_get with "Hlx"). iIntros "Hlx".
+    iApply wp_bind.
+    iApply (wp_get with "Hky"). iIntros "Hky".
+    iApply wp_bind.
+    iApply (wp_put with "Hlx"). iIntros "Hly".
+    iApply (wp_put with "Hky"). iIntros "Hkx".
+    iFrame.
+    Qed.
 End state_ad.
 
 

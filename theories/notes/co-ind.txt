@@ -1,0 +1,34 @@
+              co-ind
+e elem delay a ::=
+| Think e_1
+| Answer x          (x: A)
+
+nu for greatest fixpoint of recursion types coinductive
+and mu for least fixpoint inductive.
+
+
+Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
+    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
+    eval_delay n prog = Some x -> φ x.
+Proof.
+  revert prog.
+  intros prog Hpre Heval.
+  (* apply (@later_bupdN_soundness (iResUR Σ) n). *)
+  revert Heval Hpre.
+  revert prog.
+  induction n as [|n' IHn]; intros prog Heval Hpre.
+  rewrite -> wp_delay_unfold in Hpre.
+  unfold wp_delay_pre in Hpre.
+  destruct prog.
+  simplify_eq/=.
+  -
+    apply (uPred.pure_soundness (M := iResUR Σ)).
+    (* how do I strip the n modalities here*)
+    iMod Hpre as "H". done.
+  - 
+    eapply IHn.
+   
+
+  simpl in Hpre.
+
+Qed.

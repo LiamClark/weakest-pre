@@ -138,13 +138,37 @@ Section delay_verif.
         iNext.
         iApply (hoare_delay_consequence True _); try done.
         iIntros "!>" (res H). iPureIntro. subst res. apply coq_fib_move.
-      - iIntros (res).
+      - iIntros ([[n' y'] x']).
         iApply (hoare_delay_consequence_l (True ∗ _)).
         + iIntros "!> H". iSplit. done. iApply "H".
         + iApply (hoare_delay_ctx' True _).
-          iIntros "!> Hhd". destruct res as [[n' y'] x'] eqn: E.
+          iIntros "!> Hhd".
           done.
   Qed.
+
+  Lemma verify_delay_hoare_fib' x y n:
+      ⊢ hoare_delay True (delaystate.iter fib' (n, x, y)) (post' x y n).
+  Proof.
+      iLöb as "IH" forall (n x y).
+      iApply (hoare_delay_iter _ 
+        (λ '(n',x',y'), hoare_delay True (delaystate.iter fib' (n', x', y')) (post' x y n ))
+        ).
+       destruct n as [| n'] eqn: E.
+      (* iApply (hoare_delay_iter _ _). destruct n as [| n'] eqn: E. *)
+      - simpl.  iApply hoare_delay_mret'. iIntros "!> _".
+        done.
+      - simpl. iApply hoare_delay_mret'. iIntros "!> _". simpl.
+        iNext.
+        iApply (hoare_delay_consequence True _); try done.
+        iIntros "!>" (res H). iPureIntro. subst res. apply coq_fib_move.
+      - iIntros ([[n' y'] x']).
+        iApply (hoare_delay_consequence_l (True ∗ _)).
+        + iIntros "!> H". iSplit. done. iApply "H".
+        + iApply (hoare_delay_ctx' True _).
+          iIntros "!> Hhd".
+          done.
+  Qed.
+ 
   
   Lemma verify_delay_fib n:
       ⊢ wp_delay (fib n) (post n).
@@ -197,3 +221,29 @@ Section delay_verif.
       iApply verify_delay_state_fib'. iFrame.
   Qed.
 End delay_verif.
+
+(* 
+Plinis dentist trick
+s: nat -> nat
+nul: nat
+iter:A -> (A -> A) -> nat -> A
+pred (n: nat): nat :=
+3
+1 -> 1, 0
+2 -> 2, 1
+3 -> 3, 2
+snd $ iter (0, 0) (λ '(x, y), (S x, x) )
+
+
+
+  Lob induction: (▷ (Q1 ^ Q2) -> Q1 ^ Q2) ⊢ Q1 ^ Q2 
+  ( ▷(▷ P ^ P) -> (▷ P ^ P)) ⊢ (▷ P ^ P) 
+
+  P ⊢ ( ▷(▷ P ^ P) -> (▷ P ^ P))
+
+  - P ^ ▷ ▷ P ^ ▷ P
+    ▷ P ^ P
+
+  Goal:
+   P ⊢ ▷ P
+*)
