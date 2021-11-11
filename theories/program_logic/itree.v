@@ -27,15 +27,16 @@ Variant envE (V : Type): Type -> Type :=
 |GetE:   loc -> envE V V
 |PutE:   loc -> V -> envE V ()
 |AllocE: V -> envE V loc 
-|FreeE:  loc -> envE V ().
+|FreeE:  loc -> envE V ()
 (* Specify in the interpreter that we require the comparison *)
-(* |CmpSwpE: loc -> V -> V -> envE V (V * bool) *)
+|CasE (l: loc) (old: V) (new: V): envE V (V * bool).
 
 
 Arguments GetE {_}.
 Arguments PutE {_}.
 Arguments AllocE {_}.
 Arguments FreeE {_}.
+Arguments CasE {_}.
 
 (* Definition expr (V: Type) {cmp: EqDecision V} := itree (envE V).  *)
 Definition expr (V: Type) := itree (envE V). 

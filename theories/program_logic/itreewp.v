@@ -119,6 +119,16 @@ Qed.
 (* Check fupd_intro_mask. *)
 (* Check fupd_mask_weaken. *)
 
+(* (IH * P) ⊢ wp e Φ*)
+(* ▷ (IH * P) ⊢ ▷ wp e Φ*)
+(* ▷ IH * ▷ P ⊢ ▷ wp e Φ *)
+(* ▷ IH * P ⊢ ▷ wp e Φ *)
+(* ▷ IH * P ⊢ wp (Think e) Φ *)
+
+loop x = loop x
+
+iter (_. inl ())
+
 (* ||={E1} P -∗ |={E1,E2}=> P *)
 Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI E e Φ -∗ wp SI E (Think e) Φ.

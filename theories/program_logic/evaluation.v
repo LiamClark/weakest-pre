@@ -68,6 +68,11 @@ Definition into_prog {A} (x: option A) :=
   | None   => ProgErr
   end.
 
+(* 
+  V: the tyep of values on the heap
+  A: The type the main thread of the computation yields
+  B: the value computed by the computation
+*)
 Record state (V A B: Type): Type := 
   State {
     runState: heap V -> list (thread V A) -> error (B * heap V * list (thread V A))
@@ -171,19 +176,31 @@ Section heap_op.
 
   Definition free (n: nat): state V A unit :=
     modifyS $ delete n.
+
+
+  Definition cas {cmp: EqDecision V} (l: nat) (v v': V): state V A (V * bool).
+  refine (
+    get l ≫= λ vheap, if cmp vheap v then put l v' ;; mret (v', true) else mret (v, false)
+  ).
+  Defined.
 End heap_op.
 
 
-Definition step_vis {V R T A} (c: envE V T):
- (T -> expr V A) -> state V R (expr V A) := 
+Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
+ (T -> expr V A) -> state V R (expr V A).
+ refine(
     match c with
     |GetE l   => λ k, k <$> (get l)
     |PutE l v => λ k, k <$> (put l v)
     |AllocE v => λ k, k <$> (alloc v)
     |FreeE l  => λ k, k <$> (free l)
-    end.
+    (* |CasE l v v' => λ k, k <$> (cas l v v') *)
+    |CasE l v v' => λ k, k <$>  cas l v v'
+    end
+ ).
+Defined.
 
-Definition step_expr {V R A} (e: expr V A): state V R (expr V A) :=
+Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr V A) :=
     match e with
     | Answer x  => mret $ Answer x 
     | Vis stateE k => step_vis stateE k 
@@ -192,13 +209,13 @@ Definition step_expr {V R A} (e: expr V A): state V R (expr V A) :=
     end.
 
 
-Fixpoint eval_single {V R} (n: nat) (e: expr V R) {struct n}: state V R R :=
+Fixpoint eval_single {V R} {cmp: EqDecision V} (n: nat) (e: expr V R) {struct n}: state V R R :=
   match n with
   | O => fail
   | S n' => (step_expr e) ≫= (eval_single n') 
   end. 
 
-Definition step_thread {V R} (t: thread V R) : state V R (thread V R) :=
+Definition step_thread {V R} {cmp: EqDecision V} (t: thread V R) : state V R (thread V R) :=
     match t with 
     | Main e => Main <$> (step_expr e)
     | Forked e => Forked <$> (step_expr e) 
@@ -236,7 +253,7 @@ Definition check_main {V R} (ts: list (thread V R)): option R :=
          | t :: ts' => is_main t ≫= is_done
          end.
 
-Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R ) :=
+Definition single_step_thread {V R} {cmp: EqDecision V} (s: scheduler V R): state V R (scheduler V R ) :=
       ts ← get_threads ;  
       h  ← get_heap ; 
       let '(nt, s')    := (schedule s) (ts, h) in
@@ -247,7 +264,7 @@ Definition single_step_thread {V R} (s: scheduler V R): state V R (scheduler V R
       set_thread thread_index updatedThread ;; 
       mret s'.
 
-Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
+Fixpoint eval_threaded {V R} {cmp: EqDecision V} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
   match n with
     | O    => lift_error fail_eval
     | S n' => s' ← single_step_thread s;
@@ -260,7 +277,7 @@ Fixpoint eval_threaded {V R} (n: nat) (s : scheduler V R) {struct n}: state V R 
 
 Definition fstt {A B C} (x: A * B * C): A := x.1.1.
 
-Definition run_program {V R} (n: nat) (s: scheduler V R) (e: expr V R): error R.
+Definition run_program {V R} {cmp: EqDecision V} (n: nat) (s: scheduler V R) (e: expr V R): error R.
 refine (fst ∘ fst <$> runState (eval_threaded n s) ∅ [Main e]).
 Defined.
 
@@ -292,7 +309,7 @@ Definition dump_heap {A B C} (x: A * B * C): (A * C) :=
 
 (* Check (runState (single_step_thread prog_scheduler) ∅ [Main prog]). *)
 
-Definition steps {V R}: state V R (scheduler V R).
+Definition steps {V R} {cmp: EqDecision V} : state V R (scheduler V R).
 refine( 
    (((single_step_thread prog_scheduler ≫= single_step_thread)
     ≫= single_step_thread) ≫= single_step_thread)
