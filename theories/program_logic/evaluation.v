@@ -178,11 +178,13 @@ Section heap_op.
     modifyS $ delete n.
 
 
-  Definition cas {cmp: EqDecision V} (l: nat) (v v': V): state V A (V * bool).
+  (* Doing this as a compound operation seems to lose information that vheap was retrieved from location l *)
+  Definition cas {cmp: EqDecision V} (l: nat) (v1 v2: V): state V A (V * bool).
   refine (
-    get l ≫= λ vheap, if cmp vheap v then put l v' ;; mret (v', true) else mret (v, false)
+    get l ≫= λ vl, if decide (vl = v1) then put l v2 ;; mret (vl, true) else mret (vl, false)
   ).
   Defined.
+
 End heap_op.
 
 
@@ -194,7 +196,6 @@ Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
     |PutE l v => λ k, k <$> (put l v)
     |AllocE v => λ k, k <$> (alloc v)
     |FreeE l  => λ k, k <$> (free l)
-    (* |CasE l v v' => λ k, k <$> (cas l v v') *)
     |CasE l v v' => λ k, k <$>  cas l v v'
     end
  ).

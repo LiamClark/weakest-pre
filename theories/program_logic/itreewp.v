@@ -9,14 +9,18 @@ Section itreewp.
   Context `{!invG Σ}. 
 
 (* Curry the value R so it can be changed by the dependent pattern match on c *)
-Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop :=
+Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop.
+refine (
   match c with
-  | GetE l    => λ v, σ !! l = Some v /\ σ' = σ 
-  | PutE l v' => λ _, is_Some (σ !! l) /\ σ' = <[l := v']> σ
-  | AllocE v' => λ l, l = fresh_loc σ /\ σ' = <[l := v']> σ
-  | FreeE l   => λ _, is_Some (σ !! l) /\ σ' = delete l σ
-  end.
-
+  | GetE l      => λ v, σ !! l = Some v /\ σ' = σ 
+  | PutE l v'   => λ _, is_Some (σ !! l) /\ σ' = <[l := v']> σ
+  | AllocE v'   => λ l, l = fresh_loc σ /\ σ' = <[l := v']> σ
+  | FreeE l     => λ _, is_Some (σ !! l) /\ σ' = delete l σ
+  | CasE l v1 v2 => λ '(vret, upd), if upd then σ !! l = Some v1 /\ vret = v1 /\ σ' = <[l := v2]> σ  
+                                   else ∃x, σ !! l = Some x /\ vret = x /\ σ = σ' /\ x ≠ v1
+  end
+).
+Defined.
 
 (*
  Now I want to change these update modalities to fancy update modalities
@@ -125,9 +129,9 @@ Qed.
 (* ▷ IH * P ⊢ ▷ wp e Φ *)
 (* ▷ IH * P ⊢ wp (Think e) Φ *)
 
-loop x = loop x
+(* loop x = loop x
 
-iter (_. inl ())
+iter (_. inl ()) *)
 
 (* ||={E1} P -∗ |={E1,E2}=> P *)
 Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
@@ -559,6 +563,10 @@ Section adequacy.
   Context `{!inG Σ (heapR natO)}.
   Context `{!invG Σ}. 
 
+  Print eq_nat_dec.
+  Locate "{ A } + { B }".
+  Print sumbool.
+
   (*
     Ok what does this bugger say again?
 
@@ -612,19 +620,33 @@ Section adequacy.
       iMod ("Hwp" with "Hsi") as "Hwp".
       iIntros "!> !>".
       iMod "Hwp" as (σ' v) "(% & Hsi & Hwp)".
-      destruct e; simpl.
-      + destruct H as (Hlookup & Heq). rewrite Hlookup. subst h. simpl.
+      destruct e.
+      + simpl. destruct H as (Hlookup & Heq). rewrite Hlookup. subst h. simpl.
         iExists []. rewrite right_id_L.
         iFrame. auto.
-      + destruct H as (Hlookup & Heq). subst σ'. destruct v.
+      + simpl. destruct H as (Hlookup & Heq). subst σ'. destruct v.
         iExists []. rewrite right_id_L.
         iFrame. auto.
-      + destruct H as (Hlookup & Heq). subst σ' v. 
+      + simpl. destruct H as (Hlookup & Heq). subst σ' v. 
         iExists []. rewrite right_id_L.
         iFrame. auto.
-      + destruct H as (Hlookup & Heq). subst σ'. destruct v.
+      + simpl. destruct H as (Hlookup & Heq). subst σ'. destruct v.
         iExists []. rewrite right_id_L.
         iFrame. auto.
+      + destruct v as [vret [|]]; simpl in H.
+        * destruct H as (HLookup & -> & ->).
+        unfold step_vis. unfold cas.
+        simpl.
+        rewrite HLookup. simpl.
+        rewrite decide_True //. simpl.
+        iExists []. rewrite right_id_L.
+        iFrame. auto.
+        * destruct H as (x & HLookup & -> & -> & Hneq). 
+          unfold step_vis. unfold cas. simpl.
+          rewrite HLookup. simpl.
+          rewrite decide_False //.
+          iExists []. rewrite right_id_L.
+          iFrame. auto.
   Qed.
 
   (* 
@@ -854,8 +876,3 @@ Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invPreG Σ} {R} (φ: R -> Prop) (
 Qed.
 
 Print Assumptions adequacy.
-
-(* 
-  1. fancy update modality.
-  2. CmpSwp primitive?
-*) 

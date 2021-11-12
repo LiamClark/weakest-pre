@@ -29,7 +29,7 @@ Variant envE (V : Type): Type -> Type :=
 |AllocE: V -> envE V loc 
 |FreeE:  loc -> envE V ()
 (* Specify in the interpreter that we require the comparison *)
-|CasE (l: loc) (old: V) (new: V): envE V (V * bool).
+|CasE : loc -> V -> V -> envE V (V * bool).
 
 
 Arguments GetE {_}.
