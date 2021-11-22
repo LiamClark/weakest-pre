@@ -138,8 +138,8 @@ Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI E e Φ -∗ wp SI E (Think e) Φ.
 Proof.
   iIntros "Hwp".
-  iEval (rewrite wp_unfold). 
-  unfold wp_pre. 
+  iEval (rewrite wp_unfold).
+  unfold wp_pre.
   iApply fupd_mask_intro; first set_solver.
   iIntros "H".
   iNext. iMod "H". iModIntro.
@@ -147,7 +147,7 @@ Proof.
 Qed.
 
 Lemma wp_bind {V R B: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
-  (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R): 
+  (f: R -> expr V B) (Φ: B -> iProp Σ) (e: expr V R):
   wp SI E e (λ x, wp SI E (f x) Φ) -∗ wp SI E (e ≫= f) Φ.
 Proof.
   unfold mbind, itree_bind.
@@ -168,7 +168,7 @@ Proof.
     iNext.
     iMod ("H") as (σ' v) "H". iModIntro.
     iExists σ', v.
-    iDestruct "H" as "($ & $ & Hwp)". 
+    iDestruct "H" as "($ & $ & Hwp)".
     iApply "IH". done.
 Qed.
 
@@ -189,7 +189,7 @@ Proof.
     iNext. 
     iMod "Hwp". iModIntro.
     iApply "IH". done.
-  - repeat (iMod "Hwp"). 
+  - repeat (iMod "Hwp").
     iModIntro. iNext.
     iMod "Hwp" as "(Hwp & $)".
     iApply "IH". done.
@@ -211,7 +211,6 @@ Inductive atomic {V R: Type}: expr V R -> Prop :=
 Lemma wp_atomic {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (e: expr V R) (Φ: R -> iProp Σ)
   (a: atomic e)
-  (* Perhaps some premisse about e being atomic *)
   : (|={E1, E2}=> wp SI E2 e (λ v, |={E2, E1}=> Φ v)) ⊢ wp SI E1 e Φ.
 Proof.
   iIntros "Hwp".
@@ -472,7 +471,7 @@ Section heap_wp.
        unfold lift_excl. rewrite fmap_insert. 
        apply alloc_singleton_local_update.
        + rewrite lookup_fmap. rewrite fresh_none. done.
-       + done. 
+       + done.
   Qed.
 
   Lemma si_free σ v l:
@@ -556,16 +555,52 @@ Section heap_wp.
     - iFrame. 
       by iApply wp_return.
   Qed.
+
+  Lemma wp_cas_suc l v1 v2 E (Φ: (nat * bool) -> iProp Σ):
+    points_to γ l v1
+    -∗ ▷(points_to γ l v2  -∗ Φ (v1, true))
+    -∗ wp (state_interp γ) E (itree.cas l v1 v2) Φ.
+  Proof.
+    iIntros "Hpt HPost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
+    iMod (points_to_update with "Hsi Hpt") as "(Hsi & Hpt)".
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iExists (<[l := v2]> σ), (v1, true). simpl.
+    iSplit.
+    - by iPureIntro.
+    - iFrame.
+      iApply wp_return.
+      by iApply "HPost".
+  Qed.
+
+  Lemma wp_cas_fail l v1 v2 v3 E (Φ: (nat * bool) -> iProp Σ):
+    ⌜v1 <> v3⌝ -∗
+    points_to γ l v1
+    -∗ ▷(points_to γ l v1  -∗ Φ (v1, false))
+    -∗ wp (state_interp γ) E (itree.cas l v3 v2) Φ.
+  Proof.
+    iIntros "%Hneq Hpt HPost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iExists  σ, (v1, false). simpl.
+    iSplit.
+    - iPureIntro. by exists v1.
+    - iFrame.
+      iApply wp_return.
+      by iApply "HPost".
+  Qed.
 End heap_wp.
 
 
 Section adequacy.
   Context `{!inG Σ (heapR natO)}.
   Context `{!invG Σ}. 
-
-  Print eq_nat_dec.
-  Locate "{ A } + { B }".
-  Print sumbool.
 
   (*
     Ok what does this bugger say again?
@@ -581,11 +616,11 @@ Section adequacy.
     Except no. We do not take in account that Φ and Ψ are pure. They are any iProp predicates.
     Hence none of the soundness lemma's apply here.
   *)
-  Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ) 
+  Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ)
     (h: heap nat)
     (ts: list (thread nat R))
     (e: expr nat A)
-    : wp (state_interp γ) ⊤ e Ψ 
+    : wp (state_interp γ) ⊤ e Ψ
     -∗ state_interp γ h
     ={⊤, ∅}=∗ 
      ▷ |={∅, ⊤}=> match runState (step_expr e) h ts with
@@ -599,7 +634,7 @@ Section adequacy.
     iIntros "Hwp Hsi".
     destruct e; simpl.
     - 
-      iApply fupd_mask_intro; first set_solver. iIntros "Hclose". 
+      iApply fupd_mask_intro; first set_solver. iIntros "Hclose".
       iModIntro. iMod "Hclose". iModIntro.
       iExists []. rewrite right_id_L.
       iFrame. auto.
@@ -627,7 +662,7 @@ Section adequacy.
       + simpl. destruct H as (Hlookup & Heq). subst σ'. destruct v.
         iExists []. rewrite right_id_L.
         iFrame. auto.
-      + simpl. destruct H as (Hlookup & Heq). subst σ' v. 
+      + simpl. destruct H as (Hlookup & Heq). subst σ' v.
         iExists []. rewrite right_id_L.
         iFrame. auto.
       + simpl. destruct H as (Hlookup & Heq). subst σ'. destruct v.
@@ -641,7 +676,7 @@ Section adequacy.
         rewrite decide_True //. simpl.
         iExists []. rewrite right_id_L.
         iFrame. auto.
-        * destruct H as (x & HLookup & -> & -> & Hneq). 
+        * destruct H as (x & HLookup & -> & -> & Hneq).
           unfold step_vis. unfold cas. simpl.
           rewrite HLookup. simpl.
           rewrite decide_False //.
@@ -654,14 +689,14 @@ Section adequacy.
    Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
    Φ is still the post condition for the main thread.
   *)
-  Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ) 
+  Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ)
     (h: heap nat)
     (ts: list (thread nat R))
     (ct: thread nat R)
     : wp_thread (state_interp γ) ct Ψ 
-    -∗ state_interp γ h 
+    -∗ state_interp γ h
     ={⊤, ∅}=∗ 
-     ▷ |={∅, ⊤}=> 
+     ▷ |={∅, ⊤}=>
       match runState (step_thread ct) h ts with
       | Here (ct', h', ts') => ∃ts'', ⌜ts' = ts ++ ts''⌝
                               ∗ wp_thread (state_interp γ) ct' Ψ ∗ state_interp γ h'
@@ -676,12 +711,12 @@ Section adequacy.
     - 
       iMod (step_expr_adequacy _ _ _ _ ts  with "Hwp Hsi") as "Hexpr".
       iIntros "!> !>". iMod "Hexpr". iModIntro.
-      simpl. 
+      simpl.
       by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
     -
       iMod (step_expr_adequacy _ _ _ _ ts with "Hwp Hsi") as "Hexpr".
       iIntros "!> !>". iMod "Hexpr". iModIntro.
-      simpl. 
+      simpl.
       by destruct (runState (step_expr e) h ts) as [[[e' σ'] ts'] | | ].
   Qed.
 
@@ -689,7 +724,7 @@ Section adequacy.
    l ≠ [] -> is_Some (l !! (i mod (length l))).
   Proof.
     intro Hnil.
-    apply lookup_lt_is_Some_2. 
+    apply lookup_lt_is_Some_2.
     apply Nat.mod_upper_bound.
     by destruct l.
   Qed.
@@ -698,15 +733,15 @@ Section adequacy.
       Φ for the main thread. All the other threads namely have the trivial
       post condition
   *)
-  Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) 
+  Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ)
     (h: heap nat)
     (s: scheduler nat R)
     (ts: list (thread nat R))
-    : ts ≠ [] -> 
-    state_interp γ h 
-    -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
-    ={⊤, ∅}=∗ 
-     ▷ |={∅, ⊤}=> 
+    : ts ≠ [] ->
+    state_interp γ h
+    -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ)
+    ={⊤, ∅}=∗
+     ▷ |={∅, ⊤}=>
       match runState (single_step_thread s) h ts with
       | Here (s', h', ts') => ⌜length ts <= length ts'⌝
                               ∗ state_interp γ h'
@@ -723,12 +758,12 @@ Section adequacy.
     iMod (step_thread_adequacy _ _ _ _ ts with "Hwpct HSi" ) as "H".
     iIntros "!> !>".
     iMod "H". iModIntro.
-    rewrite Hsome /=.  
+    rewrite Hsome /=.
     destruct (runState _ h ts) as [[[t' σ'] ts'] | | ]; try done; simpl.
     iDestruct "H" as (ts'' ->) "(Hwpt' & $ & Hbigop)".
-    iSplit. 
-    - iPureIntro. rewrite insert_length app_length. lia. 
-    - rewrite insert_app_l; last first. 
+    iSplit.
+    - iPureIntro. rewrite insert_length app_length. lia.
+    - rewrite insert_app_l; last first.
       { apply Nat.mod_upper_bound. destruct ts; done. }
      iFrame.
      by iApply "Hrestore".
@@ -752,7 +787,7 @@ Section adequacy.
       + simpl in *.
       pose (Nat.nle_succ_0 _ Hlength). 
       contradiction.
-    - done. 
+    - done.
   Qed.
 
   (*
@@ -807,12 +842,12 @@ Section adequacy.
       rewrite run_bind_dist.
       destruct (runState (single_step_thread _)  h ts) as [[[s' σ'] ts'] | | ]; try done.
       +
-        rewrite run_bind_dist. 
+        rewrite run_bind_dist.
         rewrite run_get_threads.
-        destruct (check_main ts') eqn: E'. 
+        destruct (check_main ts') eqn: E'.
         * iSimpl. 
-          iMod "H". iIntros "!> !>". 
-          iApply fupd_nlaters; first set_solver. iMod "H". 
+          iMod "H". iIntros "!> !>".
+          iApply fupd_nlaters; first set_solver. iMod "H".
           apply check_main_head in E'.
           destruct E' as [ts'' E']. rewrite E'. simpl.
           iDestruct "H" as "(% & Hsi' & Hwp & Hbigop)".
@@ -823,9 +858,9 @@ Section adequacy.
           iDestruct "H" as "(% & Hsi' & Hbigop)".
           pose (Hnil' := non_nil_bigger_than  Hnil H).
           iApply ("IH" $! s' σ' ts' Hnil' with "Hsi' Hbigop").
-      + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
+      + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro.
         iApply fupd_nlaters; first set_solver. done.
-      + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro. 
+      + iSimpl. iMod "H". iIntros "!> !>". iMod "H". iModIntro.
         iApply fupd_nlaters; first set_solver. done.
   Qed.
 
@@ -852,7 +887,7 @@ End adequacy.
      let's lift that.
      Now I need to get it in a big op
 *)
-Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invPreG Σ} {R} (φ: R -> Prop) (n: nat) 
+Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invPreG Σ} {R} (φ: R -> Prop) (n: nat)
   (SI: gmap nat nat -> iProp Σ)
   (s: scheduler nat R)
   (e: expr nat R)
@@ -870,8 +905,8 @@ Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invPreG Σ} {R} (φ: R -> Prop) (
     { by apply auth_auth_valid. }
     iApply fupd_mask_intro; first set_solver. iIntros "Hclose".
     iModIntro. iMod "Hclose". iModIntro.
-    iDestruct (Hpre inv γ) as "Hwp". 
-    iPoseProof (fuel_adequacy _ _ n  _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done. 
+    iDestruct (Hpre inv γ) as "Hwp".
+    iPoseProof (fuel_adequacy _ _ n  _ s ([Main e]) with "Hsi [$Hwp]" ) as "H"; try done.
     destruct (runState _ _ _) as [[[v st] ts] | | ]; simpl; done.
 Qed.
 
