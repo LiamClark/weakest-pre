@@ -6,7 +6,7 @@ From shiris.program_logic Require Import modal itree evaluation.
 Set Default Proof Using "Type".
 
 Section itreewp.
-  Context `{!invG Σ}. 
+  Context `{!invGS Σ}. 
 
 (* Curry the value R so it can be changed by the dependent pattern match on c *)
 Definition command_predicate {V R} (c: envE V R) (σ σ': gmap loc V): R -> Prop.
@@ -400,7 +400,7 @@ Qed.
 
 Section heap_wp.
   Context `{! inG Σ (heapR natO)}.
-  Context `{!invG Σ}. 
+  Context `{!invGS Σ}. 
  (* Now come the rule that needs the points to connective in their weakest pre definition.
      We therefore first define this in terms of the Authorative camera.
    *)
@@ -600,7 +600,7 @@ End heap_wp.
 
 Section adequacy.
   Context `{!inG Σ (heapR natO)}.
-  Context `{!invG Σ}. 
+  Context `{!invGS Σ}. 
 
   (*
     Ok what does this bugger say again?
@@ -887,11 +887,11 @@ End adequacy.
      let's lift that.
      Now I need to get it in a big op
 *)
-Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invPreG Σ} {R} (φ: R -> Prop) (n: nat)
+Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invGpreS Σ} {R} (φ: R -> Prop) (n: nat)
   (SI: gmap nat nat -> iProp Σ)
   (s: scheduler nat R)
   (e: expr nat R)
-  : (∀ `{!invG Σ} γ, ⊢ wp (state_interp γ) ⊤ e (λ x, ⌜φ x⌝)) ->
+  : (∀ `{!invGS Σ} γ, ⊢ wp (state_interp γ) ⊤ e (λ x, ⌜φ x⌝)) ->
   match run_program n s e with
   | Here x => φ x
   | ProgErr => False

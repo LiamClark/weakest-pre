@@ -1,6 +1,5 @@
-From stdpp Require Import list base gmap fin_sets fin_map_dom.
+From stdpp Require Import list option base gmap fin_sets fin_map_dom.
 Require Import Unicode.Utf8.
-Require Import Coq.Logic.FunctionalExtensionality.
 
 (*First we define the delay monad and it's looping combinators *)
 CoInductive delay (A: Type): Type :=
@@ -22,11 +21,11 @@ Definition delay_bind {A B} (f: A -> delay B): delay A -> delay B :=
 
 Instance mret_delay : MRet delay := λ _ x, Answer x.
 
-Instance mbind_delay : MBind delay := 
+Instance mbind_delay : (MBind delay) := 
   λ _ _ f ma, delay_bind f ma.
 
 
-Instance fmap_delay : FMap delay := 
+Instance fmap_delay: (FMap delay) := 
   λ A B f ma,
         ma ≫= compose Answer f.
 
@@ -103,8 +102,12 @@ Arguments runState {_ _}.
 Instance mret_state_delay ST : MRet (state_delay ST) :=
    λ A a, State $ λ s, Answer $ Some (s, a).
 
+Definition map_option_product {A B ST} (f: A -> B) (ma: option (ST * A)): option (ST * B) :=
+  fmap (prod_map id f) ma.
+
 Instance fmap_state_delay ST : FMap (state_delay ST) :=
-  (λ A B f ma, State $ λ st, fmap (fmap (prod_map id f)) (runState ma st)).
+  (λ A B f ma, State $ λ st, 
+    fmap (map_option_product f) (runState ma st)).
 
 Instance mbind_state_delay ST: MBind (state_delay ST) :=
  λ A B f ma, State $ λ st, (runState ma st) ≫=
@@ -167,19 +170,6 @@ Proof.
   rewrite <- (delay_frob_eq (_ ≫= _)).
   done.
 Qed.
-
-(* *)
-Lemma iter_state_delay_unfold_first' {A B ST} (f: A -> state_delay ST (A + B)) (x: A):
-  (λ s, runState (iter_state_delay f x) s) = (λ s, distribute_delay_state (runState (f x) s) ≫= 
-   case_ (λ a, Think $ iter (λ optsa, match optsa with
-            | Some (s', a') => distribute_delay_state (runState (f a') s')
-            | None => Answer $ inr $ None 
-            end) a) Answer).
-Proof.
-   apply functional_extensionality.
-   apply iter_state_delay_unfold_first.
-Qed.
-
 
 (* Since runstate is exposed in the law above,
  can I prove something that puts it pack in the state abstraction?*)

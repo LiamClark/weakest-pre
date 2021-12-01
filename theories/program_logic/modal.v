@@ -94,7 +94,7 @@ Qed.
 (* 
   This was convenient but let's cover this with Robbert
 *)
-Lemma fupd_nlaters {Σ} `{!invG Σ} (n: nat) (E1 E2: coPset) (Q: iProp Σ):
+Lemma fupd_nlaters {Σ} `{!invGS Σ} (n: nat) (E1 E2: coPset) (Q: iProp Σ):
   E2 ⊆ E1 ->
   Q ⊢ Nat.iter n (λ P : iPropI Σ, |={E1, E2}=> ▷ |={E2, E1}=> P) Q.
 Proof.
