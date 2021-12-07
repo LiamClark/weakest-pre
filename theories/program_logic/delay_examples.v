@@ -142,33 +142,10 @@ Section delay_verif.
         iApply (hoare_delay_consequence_l (True ∗ _)).
         + iIntros "!> H". iSplit. done. iApply "H".
         + iApply (hoare_delay_ctx' True _).
-          iIntros "!> Hhd".
+          iIntros "!> !> Hhd".
           done.
   Qed.
 
-  Lemma verify_delay_hoare_fib' x y n:
-      ⊢ hoare_delay True (delaystate.iter fib' (n, x, y)) (post' x y n).
-  Proof.
-      iLöb as "IH" forall (n x y).
-      iApply (hoare_delay_iter _ 
-        (λ '(n',x',y'), hoare_delay True (delaystate.iter fib' (n', x', y')) (post' x y n ))
-        ).
-       destruct n as [| n'] eqn: E.
-      (* iApply (hoare_delay_iter _ _). destruct n as [| n'] eqn: E. *)
-      - simpl.  iApply hoare_delay_mret'. iIntros "!> _".
-        done.
-      - simpl. iApply hoare_delay_mret'. iIntros "!> _". simpl.
-        iNext.
-        iApply (hoare_delay_consequence True _); try done.
-        iIntros "!>" (res H). iPureIntro. subst res. apply coq_fib_move.
-      - iIntros ([[n' y'] x']).
-        iApply (hoare_delay_consequence_l (True ∗ _)).
-        + iIntros "!> H". iSplit. done. iApply "H".
-        + iApply (hoare_delay_ctx' True _).
-          iIntros "!> Hhd".
-          done.
-  Qed.
- 
   
   Lemma verify_delay_fib n:
       ⊢ wp_delay (fib n) (post n).
@@ -222,6 +199,24 @@ Section delay_verif.
   Qed.
 End delay_verif.
 
+Definition loop_prog {A}: delay A :=
+  delaystate.iter (λ x, mret $ inl ()) ().
+
+Section loop_verif.
+  Context `{! inG Σ (heapR natO)}.
+
+  Lemma loop_verif {A}: 
+    ⊢ @wp_delay Σ A loop_prog (λ _, False).
+  Proof.
+    iLöb as "IH".
+    unfold loop_prog.
+    iApply wp_delay_iter.
+    iApply wp_delay_return.
+    simpl.
+    iApply "IH". 
+  Qed.
+
+End loop_verif.
 (* 
 Plinis dentist trick
 s: nat -> nat

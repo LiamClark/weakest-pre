@@ -185,7 +185,8 @@ Proof.
 Qed.
 
 
-Lemma wp_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp SI (mret x) Φ.
+Lemma wp_return {Σ A ST } {SI: ST -> iProp Σ} (x: A) (Φ: A -> iProp Σ):
+   Φ x -∗ wp SI (mret x) Φ.
 Proof.
   iIntros "H" (σ) "HSi".
   simpl.
