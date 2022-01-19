@@ -209,7 +209,7 @@ Section loop_verif.
     ⊢ @wp_delay Σ A loop_prog (λ _, False).
   Proof.
     iLöb as "IH".
-    unfold loop_prog.
+    (* unfold loop_prog. *)
     iApply wp_delay_iter.
     iApply wp_delay_return.
     simpl.

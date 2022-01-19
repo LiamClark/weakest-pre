@@ -48,13 +48,15 @@ Definition free {V} (l: loc): expr V () := Vis (FreeE l) Answer.
 Definition cas {V} (l: loc) (v1 v2: V): expr V (V * bool) := Vis (CasE l v1 v2) Answer.
 
 (* Apply the continuation k to the Ret nodes of the itree t *)
-Instance itree_bind {E}: MBind (itree E) := λ R S k, 
-    cofix go u := match u with
+Instance itree_bind {E}: MBind (itree E) := 
+  λ (R S: Type) (k: R -> itree E S), 
+    cofix go (u : itree E R): itree E S := match u with
     | Answer r => k r
     | Think t => Think (go t)
     | Fork e k => Fork e (go k)
     | Vis e k => Vis e (λ x, go (k x))
     end.
+
 
 Instance itree_mret {E}: MRet (itree E) :=
  λ _ x, Answer x.
@@ -77,6 +79,14 @@ Definition case_ {A B C}  (f: A -> C) (g: B -> C)
   
 CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
     pipe f (case_ (Think ∘ iter f) Answer). 
+
+(* Definition to present in thesis *)
+(* CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
+  fun a => ab ← f a ;
+    match ab with 
+      | inl a => Think (iter f a)
+      | inr b => Answer b
+    end. *)
 
 Definition expr_frob {V R} (e: expr V R): expr V R :=
   match e with
