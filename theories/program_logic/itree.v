@@ -5,13 +5,9 @@ From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
 Require Import Unicode.Utf8.
 
-(*
-This is the type algebra normalized form of:
-∀ S, iTree (stateE S).
-*)
 CoInductive itree (E: Type -> Type) (R: Type): Type :=
-| Answer (r: R) (* computation terminating with value r *)
-| Think (t: itree E R) (* "silent" tau transition with child t *)
+| Answer: R -> itree E R  
+| Think: itree E R -> itree E R 
 | Fork: itree E () ->  itree E R -> itree E R
 | Vis: ∀{A: Type}, E A -> (A -> itree E R) -> itree E R.
 
@@ -50,12 +46,13 @@ Definition cas {V} (l: loc) (v1 v2: V): expr V (V * bool) := Vis (CasE l v1 v2) 
 (* Apply the continuation k to the Ret nodes of the itree t *)
 Instance itree_bind {E}: MBind (itree E) := 
   λ (R S: Type) (k: R -> itree E S), 
-    cofix go (u : itree E R): itree E S := match u with
-    | Answer r => k r
-    | Think t => Think (go t)
-    | Fork e k => Fork e (go k)
-    | Vis e k => Vis e (λ x, go (k x))
-    end.
+    cofix go (u : itree E R): itree E S :=
+      match u with
+      | Answer r => k r
+      | Think e => Think (go e)
+      | Fork ef e => Fork ef (go e)
+      | Vis cmd k => Vis cmd (λ x, go (k x))
+      end.
 
 
 Instance itree_mret {E}: MRet (itree E) :=

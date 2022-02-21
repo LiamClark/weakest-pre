@@ -199,11 +199,11 @@ Section delay_verif.
   Qed.
 End delay_verif.
 
-Definition loop_prog_body {A}: unit -> delay A :=
+Definition loop_body {A}: unit -> delay A :=
   delaystate.iter (λ x, mret $ inl ()).
 
 Definition loop_prog {A}: delay A :=
-    loop_prog ().
+    loop_body ().
 
 Section loop_verif.
   Context `{! inG Σ (heapR natO)}.
