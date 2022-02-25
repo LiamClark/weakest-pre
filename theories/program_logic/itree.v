@@ -24,8 +24,7 @@ Variant envE (V : Type): Type -> Type :=
 |PutE:   loc -> V -> envE V ()
 |AllocE: V -> envE V loc 
 |FreeE:  loc -> envE V ()
-(* Specify in the interpreter that we require the comparison *)
-|CasE : loc -> V -> V -> envE V (V * bool).
+|CasE :  loc -> V -> V -> envE V (V * bool).
 
 
 Arguments GetE {_}.
@@ -78,7 +77,7 @@ Definition case_ {A B C}  (f: A -> C) (g: B -> C)
     pipe f (case_ (Think ∘ iter f) Answer).  *)
 
 (* Definition to present in thesis *)
-CoFixpoint iter {E A B} (f: A -> itree E (A + B)) : A -> itree E V B :=
+CoFixpoint iter {E A B} (f: A -> itree E (A + B)) : A -> itree E B :=
   fun a => ab ← f a ;
     match ab with 
       | inl a => Think (iter f a)
@@ -106,7 +105,7 @@ Proof.
   done.
 Qed.
 
-Definition loop {V A B C} (f: (C + A) -> expr V (C + B)): A -> expr V B :=
+Definition loop {E A B C} (f: (C + A) -> itree E (C + B)): A -> itree E B :=
     λ a, iter (λ ca,
                  cb ← f ca ;
                  match cb with
