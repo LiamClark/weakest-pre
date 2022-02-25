@@ -74,16 +74,16 @@ Definition case_ {A B C}  (f: A -> C) (g: B -> C)
         | inr b => g b
         end .
   
-CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
-    pipe f (case_ (Think ∘ iter f) Answer). 
+(* CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
+    pipe f (case_ (Think ∘ iter f) Answer).  *)
 
 (* Definition to present in thesis *)
-(* CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
+CoFixpoint iter {E A B} (f: A -> itree E (A + B)) : A -> itree E V B :=
   fun a => ab ← f a ;
     match ab with 
       | inl a => Think (iter f a)
       | inr b => Answer b
-    end. *)
+    end.
 
 Definition expr_frob {V R} (e: expr V R): expr V R :=
   match e with
