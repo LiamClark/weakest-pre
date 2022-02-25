@@ -80,15 +80,15 @@ Qed.
   the intuition is as follows: I don't actually get it yet let's just run it and see what it does.
 *)
 Definition loop {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
-  λ a, iter 
-      (λ ca: C + A, 
-        f ca ≫= λ cb: C + B, 
+  λ a,
+    iter (λ ca: C + A,
+          f ca ≫= λ cb: C + B,
                    match cb with
                    | inl c => Answer $ inl $ inl c
                    | inr b => Answer $ inr b
                    end
-        )
-   (inr a).
+         )
+         (inr a).
 
 (*Now we define our computations in terms of StateT ST (OptionT Delay) *)
 Record state_delay (ST A: Type) : Type := State {

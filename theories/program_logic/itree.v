@@ -73,16 +73,16 @@ Definition case_ {A B C}  (f: A -> C) (g: B -> C)
         | inr b => g b
         end .
   
-(* CoFixpoint iter {V A B} (f: A -> expr V (A + B)) : A -> expr V B :=
-    pipe f (case_ (Think ∘ iter f) Answer).  *)
+CoFixpoint iter {E A B} (f: A -> itree E (A + B)) : A -> itree E B :=
+    pipe f (case_ (Think ∘ iter f) Answer).
 
 (* Definition to present in thesis *)
-CoFixpoint iter {E A B} (f: A -> itree E (A + B)) : A -> itree E B :=
-  fun a => ab ← f a ;
-    match ab with 
-      | inl a => Think (iter f a)
-      | inr b => Answer b
-    end.
+CoFixpoint iter' {E A B} (f: A -> itree E (A + B)) : A -> itree E B :=
+  λ a, ab ← f a ;
+       match ab with 
+         | inl a => Think (iter' f a)
+         | inr b => Answer b
+       end.
 
 Definition expr_frob {V R} (e: expr V R): expr V R :=
   match e with
@@ -106,13 +106,15 @@ Proof.
 Qed.
 
 Definition loop {E A B C} (f: (C + A) -> itree E (C + B)): A -> itree E B :=
-    λ a, iter (λ ca,
-                 cb ← f ca ;
-                 match cb with
-                 | inl c => mret (inl (inl c))
-                 | inr b => mret (inr b)
-                 end
-    ) (inr a).
+  λ a,
+    iter (λ ca,
+            cb ← f ca ;
+            match cb with
+            | inl c => mret (inl (inl c))
+            | inr b => mret (inr b)
+            end
+         )
+         (inr a).
 
 Definition is_done {V R} (e: expr V R): option R :=
     match e with
