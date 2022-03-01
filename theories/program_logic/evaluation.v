@@ -3,9 +3,9 @@ From shiris.program_logic Require Import itree.
 
 Definition heap V := gmap nat V.
 
-(* How am I going to differentiate between the main thread that returns a value,
-   And the spawned threads that do not. 
- *)
+(* 
+  To distinguish between forked threads that return no value.
+*)
 Variant thread (V A: Type): Type :=
 | Main (e: expr V A)
 | Forked (e: expr V ()).
@@ -135,15 +135,7 @@ Section state_op.
      State $ λ h t, fail_prog.
 
   (*
-  There might be something tricky here,
-  if a thread executions forks the updated thread is later set.
-  so we do
-  If we had [t1] then t1 is index 0.
-  t <- get_thread n ;
-  Fork occurs ;
-  now we have [t1, t2]
-  set_thread t' n
-  so the index is stable
+    Add forked threads at the end to keep thread indices stable.
   *)
    Definition fork (e: state V A B) (t: thread V A): state V A B :=
      State $ λ h ts, (runState e) h (ts ++ [t]).
@@ -170,45 +162,36 @@ Section heap_op.
     modifyS <[n := x]>.
 
   Definition alloc (v: V) : state V A nat :=
-    modifyS'$ λ st, 
+    modifyS' $ λ st, 
                 let l := fresh_loc st
                 in (l, <[l:= v]> st).
 
   Definition free (n: nat): state V A unit :=
     modifyS $ delete n.
 
-
-  (* Doing this as a compound operation seems to lose information that vheap was retrieved from location l *)
-  Definition cas {cmp: EqDecision V} (l: nat) (v1 v2: V): state V A (V * bool).
-  refine (
-    get l ≫= λ vl, if decide (vl = v1) then put l v2 ;; mret (vl, true) else mret (vl, false)
-  ).
-  Defined.
+  Definition cas {cmp: EqDecision V} (l: nat) (v1 v2: V): state V A (V * bool) :=
+    get l ≫= λ vl, if decide (vl = v1) then put l v2 ;; mret (vl, true) else mret (vl, false).
 
 End heap_op.
 
 
 Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
- (T -> expr V A) -> state V R (expr V A).
- refine(
-    match c with
-    |GetE l   => λ k, k <$> (get l)
-    |PutE l v => λ k, k <$> (put l v)
-    |AllocE v => λ k, k <$> (alloc v)
-    |FreeE l  => λ k, k <$> (free l)
-    |CasE l v v' => λ k, k <$>  cas l v v'
-    end
- ).
-Defined.
+ (T -> expr V A) -> state V R (expr V A) :=
+  match c with
+  |GetE l      => λ k, k <$> get l
+  |PutE l v    => λ k, k <$> put l v
+  |AllocE v    => λ k, k <$> alloc v
+  |FreeE l     => λ k, k <$> free l
+  |CasE l v v' => λ k, k <$> cas l v v'
+  end.
 
 Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr V A) :=
-    match e with
-    | Answer x  => mret $ Answer x 
-    | Vis stateE k => step_vis stateE k 
-    | Fork e' k => fork (mret k) (Forked e')
-    | Think e'  =>  mret e'
-    end.
-
+  match e with
+  | Answer x  => mret $ Answer x 
+  | Vis stateE k => step_vis stateE k 
+  | Fork e' k => fork (mret k) (Forked e')
+  | Think e'  =>  mret e'
+  end.
 
 Fixpoint eval_single {V R} {cmp: EqDecision V} (n: nat) (e: expr V R) {struct n}: state V R R :=
   match n with
@@ -217,10 +200,10 @@ Fixpoint eval_single {V R} {cmp: EqDecision V} (n: nat) (e: expr V R) {struct n}
   end. 
 
 Definition step_thread {V R} {cmp: EqDecision V} (t: thread V R) : state V R (thread V R) :=
-    match t with 
-    | Main e => Main <$> (step_expr e)
-    | Forked e => Forked <$> (step_expr e) 
-    end.
+  match t with 
+  | Main e => Main <$> (step_expr e)
+  | Forked e => Forked <$> (step_expr e) 
+  end.
 
 (* get main expr from pool 
    fix order indexing by modulo.
