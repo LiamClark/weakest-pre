@@ -147,7 +147,7 @@ Section state_op.
      State $ λ h ts, (λ t, (t, h, ts)) <$> into_eval (ts !! n).
 
    Definition set_thread (n: nat) (t: thread V A): state V A () :=
-    State $ λ h ts, Here $ (tt, h,  <[n:=t]> ts).
+     State $ λ h ts, Here $ (tt, h,  <[n:=t]> ts).
    
 End state_op.
 
@@ -178,11 +178,11 @@ End heap_op.
 Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
  (T -> expr V A) -> state V R (expr V A) :=
   match c with
-  |GetE l      => λ k, k <$> get l
-  |PutE l v    => λ k, k <$> put l v
-  |AllocE v    => λ k, k <$> alloc v
-  |FreeE l     => λ k, k <$> free l
-  |CasE l v v' => λ k, k <$> cas l v v'
+  | GetE l          => λ k, k <$> get l
+  | PutE l v        => λ k, k <$> put l v
+  | AllocE v        => λ k, k <$> alloc v
+  | FreeE l         => λ k, k <$> free l
+  | CmpXchgE l v v' => λ k, k <$> cas l v v'
   end.
 
 Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr V A) :=
@@ -205,9 +205,6 @@ Definition step_thread {V R} {cmp: EqDecision V} (t: thread V R) : state V R (th
   | Forked e => Forked <$> (step_expr e) 
   end.
 
-(* get main expr from pool 
-   fix order indexing by modulo.
-*)
 CoInductive scheduler V R := Scheduler {
   schedule: list (thread V R) * heap V -> nat * scheduler V R
 }.
@@ -237,6 +234,9 @@ Definition check_main {V R} (ts: list (thread V R)): option R :=
          | t :: ts' => is_main t ≫= is_done
          end.
 
+(* get main expr from pool 
+   fix order indexing by modulo.
+*)
 Definition single_step_thread {V R} {cmp: EqDecision V} (s: scheduler V R): state V R (scheduler V R ) :=
       ts ← get_threads ;  
       h  ← get_heap ; 
@@ -261,6 +261,12 @@ Fixpoint eval_threaded {V R} {cmp: EqDecision V} (n: nat) (s : scheduler V R) {s
 
 Definition fstt {A B C} (x: A * B * C): A := x.1.1.
 
+(* 
+  cmp: The EqDecision type class is there to be able to compare values on the heap for CasE.
+  n  : The fuel to ensure termination.
+  s  : The co-inductive scheduler to allow for interleaving of threads.
+  e  : The program to run.
+*)
 Definition run_program {V R} {cmp: EqDecision V} (n: nat) (s: scheduler V R) (e: expr V R): error R.
 refine (fst ∘ fst <$> runState (eval_threaded n s) ∅ [Main e]).
 Defined.

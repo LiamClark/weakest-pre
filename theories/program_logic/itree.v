@@ -20,18 +20,18 @@ Arguments Vis {_ _ _}.
 Definition loc := nat.
 
 Variant envE (V : Type): Type -> Type :=
-|GetE:   loc -> envE V V
-|PutE:   loc -> V -> envE V ()
-|AllocE: V -> envE V loc 
-|FreeE:  loc -> envE V ()
-|CasE :  loc -> V -> V -> envE V (V * bool).
+|GetE:      loc -> envE V V
+|PutE:      loc -> V -> envE V ()
+|AllocE:    V -> envE V loc 
+|FreeE:     loc -> envE V ()
+|CmpXchgE:  loc -> V -> V -> envE V (V * bool).
 
 
 Arguments GetE {_}.
 Arguments PutE {_}.
 Arguments AllocE {_}.
 Arguments FreeE {_}.
-Arguments CasE {_}.
+Arguments CmpXchgE {_}.
 
 (* Definition expr (V: Type) {cmp: EqDecision V} := itree (envE V).  *)
 Definition expr (V: Type) := itree (envE V). 
@@ -40,7 +40,7 @@ Definition get {V} (l: loc): expr V V := Vis (GetE l) Answer.
 Definition put {V} (l: loc) (v: V): expr V () := Vis (PutE l v) Answer .
 Definition alloc {V} (v: V): expr V loc := Vis (AllocE v) Answer.
 Definition free {V} (l: loc): expr V () := Vis (FreeE l) Answer.
-Definition cas {V} (l: loc) (v1 v2: V): expr V (V * bool) := Vis (CasE l v1 v2) Answer.
+Definition cmpXchg {V} (l: loc) (v1 v2: V): expr V (V * bool) := Vis (CmpXchgE l v1 v2) Answer.
 
 (* Apply the continuation k to the Ret nodes of the itree t *)
 Instance itree_bind {E}: MBind (itree E) := 
