@@ -2,7 +2,7 @@ From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
-From shiris.program_logic Require Import modal delaystate. 
+From shiris.program_logic Require Import heapmodel modal delaystate. 
 Set Default Proof Using "Type".
 
 (*
@@ -295,105 +295,10 @@ Proof.
 Qed.
 End state_wp.
 
-(*Heap rules *)
-Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
-
-Lemma fresh_none (σ: gmap nat nat): 
-  let l := fresh (dom (gset nat) σ)
-  in σ !! l = None.
-Proof.
-  apply (not_elem_of_dom (D := gset nat)).
-  apply is_fresh.
-Qed.
-
 Section state_wp_gp.
   Context `{! inG Σ (heapR natO)}.
-
- (* Now come the rule that needs the points to connective in their weakest pre definition.
-     We therefore first define this in terms of the Authorative camera.
-   *)
-
-  Definition points_to (γ: gname) (n: nat) (v: nat): iProp Σ :=
-    own γ ( ◯ {[ n := Excl v ]}).
-
-  Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
-  Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
   Context (γ: gname).
-
-  Lemma rewrite_lookups σ n v : lift_excl σ !! n ≡ Excl' v -> (σ !! n) = Some v.
-  Proof.
-    intros H.
-    rewrite (lookup_fmap Excl σ n) in H.
-    destruct (leibniz_equiv_iff (Excl <$> σ !! n) (Excl' v)).
-    apply H0 in H.
-    destruct (σ !! n) eqn: E.
-    - injection H. auto.
-    - done.
-  Qed.
-
-  Lemma si_points_to_agree σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
-  Proof.
-    iIntros "Hsi Hpt".
-    unfold state_interp. unfold points_to.
-    iDestruct (own_valid_2 with "Hsi Hpt") as "%".
-    pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
-    destruct (a H) as [H1 H2].
-    iPureIntro.
-    pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
-    apply rewrite_lookups.
-    assumption.
-  Qed.
-
-  Lemma lift_excl_some σ n v: σ !! n = Some v -> lift_excl σ !! n = Some (Excl v).
-  Proof.
-    intro H.
-    rewrite lookup_fmap. rewrite H.
-    reflexivity.
-  Qed.
-
-  Lemma points_to_update σ n v w:
-    state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
-  Proof.
-    iIntros "Hsi Hpt".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as "%".
-    unfold state_interp. unfold points_to.
-    iApply own_op.
-    iApply (own_update_2 with "Hsi Hpt").
-    apply auth_update. unfold lift_excl.
-    rewrite fmap_insert.
-    eapply singleton_local_update.
-    * apply lift_excl_some. apply H.
-    * apply exclusive_local_update.
-      done.
-    Qed.
-
-  Lemma si_alloc σ v:
-    let l := fresh (dom (gset nat) σ)
-    in  state_interp γ σ ==∗ state_interp γ (<[l := v ]> σ) ∗ points_to γ l v.
-  Proof.
-    iIntros "Hsi".
-    iApply own_op.
-    iApply (own_update with "Hsi").
-    -  apply auth_update_alloc.
-       unfold lift_excl. rewrite fmap_insert. 
-       apply alloc_singleton_local_update.
-       + rewrite lookup_fmap. rewrite fresh_none. done.
-       + done. 
-  Qed.
-
-  Lemma si_free σ v l:
-   state_interp γ σ -∗ points_to γ l v ==∗ state_interp γ (delete l σ).
-  Proof.
-    iIntros "Hsi Hpt".
-    iApply (own_update).
-    - apply auth_update_dealloc.
-      unfold lift_excl. rewrite fmap_delete.
-      apply (delete_singleton_local_update _ l (Excl v)).
-    - iApply own_op.
-      iFrame.
-  Qed.
-
+  
   Lemma wp_get n v (Ψ: nat -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (get n) Ψ.
   Proof.
