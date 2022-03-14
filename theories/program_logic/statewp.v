@@ -42,7 +42,6 @@ Section state_wp.
     eauto with iFrame.
   Qed.
 
-
   Lemma bupd_wp {A} (e: state ST A) Φ : (|==> state_wp SI e Φ) ⊢ state_wp SI e Φ.
   Proof.
     iIntros "Hwp" (σ) "HSi".
@@ -124,11 +123,9 @@ Section state_wp.
 
 End state_wp.
 
-Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
+Definition heapR (A: Type): cmra := authR (gmapUR nat (exclR (leibnizO A))).
 
-
-
-  Lemma fresh_none (σ: gmap nat nat): 
+  Lemma fresh_none {A} (σ: gmap nat A): 
     let l := fresh (dom (gset nat) σ)
     in σ !! l = None.
   Proof.
@@ -137,32 +134,25 @@ Definition heapR (A: ofe): cmra := authR (gmapUR nat (exclR A)).
   Qed.
 
 Section state_wp_gp.
-  Context `{! inG Σ (heapR natO)}.
+  Context `{! inG Σ (heapR A)}.
 
  (* Now come the rule that needs the points to connective in their weakest pre definition.
      We therefore first define this in terms of the Authorative camera.
    *)
 
-  Definition points_to (γ: gname) (n: nat) (v: nat): iProp Σ :=
+  Definition points_to (γ: gname) (n: nat) (v: A): iProp Σ :=
     own γ ( ◯ {[ n := Excl v ]}).
 
-  Definition lift_excl (σ: gmap nat nat): (gmap nat (excl nat)) := (Excl <$> σ).
-  Definition state_interp (γ: gname) (σ: gmap nat nat) := own γ (● (lift_excl σ)).
+  Definition lift_excl (σ: gmap nat A): gmap nat (excl (leibnizO A)) := Excl <$> σ.
+  Definition state_interp (γ: gname) (σ: gmap nat A) := own γ (● (lift_excl σ)).
 
   Context (γ: gname).
 
-  Lemma rewrite_lookups σ n v : lift_excl σ !! n ≡ Excl' v -> (σ !! n) = Some v.
+  Lemma rewrite_lookups σ n v : lift_excl σ !! n = Excl' v -> (σ !! n) = Some v.
   Proof.
     intros H.
-    rewrite (lookup_fmap Excl σ n) in H.
-    destruct (leibniz_equiv_iff (Excl <$> σ !! n) (Excl' v)).
-    apply H0 in H.
-    unfold fmap in H.
-    unfold option_fmap in H.
-    unfold option_map in H.
-    destruct (σ !! n) eqn: E.
-    - injection H. auto.
-    - discriminate H.
+    rewrite lookup_fmap in H.
+    destruct (σ !! n) eqn: E; naive_solver.
   Qed.
 
   Lemma si_points_to_agree σ n v: state_interp γ σ -∗ points_to γ n v -∗ ⌜σ !! n = Some v⌝.
@@ -170,12 +160,11 @@ Section state_wp_gp.
     iIntros "Hsi Hpt".
     unfold state_interp.
     unfold points_to.
-    iDestruct (own_valid_2 with "Hsi Hpt") as "%".
-    pose (cmr := (gmapUR nat (exclR natO))).
-    pose (proj1 (@auth_both_valid_discrete cmr _ (lift_excl σ) ({[n := Excl v]}))).
-    destruct (a H) as [H1 H2].
+    iDestruct (own_valid_2 with "Hsi Hpt") as "%H".
+    apply auth_both_valid_discrete in H as [H1 H2].
     iPureIntro.
-    pose (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
+    pose proof (proj1 (singleton_included_exclusive_l (lift_excl σ) n (Excl v) _ H2) H1).
+    apply leibniz_equiv_iff in H.
     apply rewrite_lookups.
     assumption.
   Qed.
@@ -193,21 +182,18 @@ Section state_wp_gp.
     state_interp γ σ -∗ points_to γ n v ==∗ state_interp γ (<[n := w ]> σ) ∗ points_to γ n w.
   Proof.
     iIntros "Hsi Hpt".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as "%".
+    iDestruct (si_points_to_agree with "Hsi Hpt") as "%H".
     unfold state_interp.
     unfold points_to.
     iApply own_op.
-    iApply (own_update_2 with "[Hsi]").
-    2: iAssumption.
-    2: iAssumption.
-    -
-      apply auth_update.
-      unfold lift_excl.
-      rewrite fmap_insert.
-      eapply singleton_local_update.
-      * apply lift_excl_some. apply H.
-      * apply exclusive_local_update.
-        reflexivity.
+    iApply (own_update_2 with "Hsi Hpt").
+    apply auth_update.
+    unfold lift_excl.
+    rewrite fmap_insert.
+    apply: singleton_local_update.
+    * apply lift_excl_some. apply H.
+    * apply exclusive_local_update.
+      reflexivity.
     Qed.
 
   Lemma si_alloc σ v:
@@ -220,7 +206,7 @@ Section state_wp_gp.
     iApply (own_update).
     -  apply auth_update_alloc.
        unfold lift_excl. rewrite fmap_insert. 
-       apply alloc_singleton_local_update.
+       apply: alloc_singleton_local_update.
        + rewrite lookup_fmap. rewrite fresh_none. done.
        + done. 
     - unfold lift_excl. done.
@@ -237,12 +223,12 @@ Section state_wp_gp.
       unfold lift_excl. rewrite fmap_delete.
       (* why does this fail type class resolution? *)
       (* apply delete_singleton_local_update with (x := Excl v). *)
-      apply (delete_singleton_local_update _ l (Excl v)).
+      apply (delete_singleton_local_update _ l (Excl (v: leibnizO A))).
     - iApply own_op.
       iFrame.
   Qed.
 
-  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
+  Lemma wp_get n v (Ψ: A -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
   Proof.
     iIntros "Hpt Hpost".
