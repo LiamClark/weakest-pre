@@ -305,7 +305,7 @@ Section state_wp_gp.
     iIntros "Hpt Hpost".
     iApply wp_bind. iApply wp_getS.
     iIntros (σ) "Hsi".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as %->.
+    iDestruct (si_get with "Hsi Hpt") as %->.
     iIntros "{$Hsi} !>".
     iApply wp_return. by iApply "Hpost".
   Qed.
@@ -316,7 +316,7 @@ Section state_wp_gp.
     iIntros "Hpt Hpost".
     iApply wp_modifyS.
     iIntros (σ) "Hsi". 
-    iMod (points_to_update with "Hsi Hpt") as "($ & Hup)". 
+    iMod (si_put with "Hsi Hpt") as "($ & Hup)". 
     by iApply "Hpost".
   Qed. 
 

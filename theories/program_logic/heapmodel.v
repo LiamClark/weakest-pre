@@ -34,7 +34,7 @@ Section heap.
     destruct (σ !! n) eqn: E; naive_solver.
   Qed.
 
-  Lemma si_points_to_agree σ n v: state_interp σ -∗ points_to n v -∗ ⌜σ !! n = Some v⌝.
+  Lemma si_get σ n v: state_interp σ -∗ points_to n v -∗ ⌜σ !! n = Some v⌝.
   Proof.
     iIntros "Hsi Hpt".
     unfold state_interp.
@@ -57,11 +57,11 @@ Section heap.
     reflexivity.
   Qed.
 
-  Lemma points_to_update σ n v w:
+  Lemma si_put σ n v w:
     state_interp σ -∗ points_to n v ==∗ state_interp (<[n := w ]> σ) ∗ points_to n w.
   Proof.
     iIntros "Hsi Hpt".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as "%H".
+    iDestruct (si_get with "Hsi Hpt") as "%H".
     unfold state_interp.
     unfold points_to.
     iApply own_op.

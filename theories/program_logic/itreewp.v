@@ -400,7 +400,7 @@ Section heap_wp.
     iIntros (σ) "Hsi".
     iApply fupd_mask_intro; first set_solver.
     iIntros "Hclose !>". iMod "Hclose". iModIntro. iExists σ, v. simpl.
-    iDestruct (si_points_to_agree with "Hsi Hpt") as %H. 
+    iDestruct (si_get with "Hsi Hpt") as %H. 
     iSplit; try done.
     iFrame. 
     iApply wp_return. by iApply "Hpost".
@@ -412,8 +412,8 @@ Section heap_wp.
     iIntros "Hpt Hpost".
     rewrite wp_unfold. unfold wp_pre.
     iIntros (σ) "Hsi". 
-    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
-    iMod (points_to_update with "Hsi Hpt") as "(Hsi & Hpt)". 
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_put with "Hsi Hpt") as "(Hsi & Hpt)". 
     iApply fupd_mask_intro; first set_solver.
     iIntros "Hclose !>". iMod "Hclose". iModIntro.
     iExists (<[n := v']> σ), tt. simpl.
@@ -449,7 +449,7 @@ Section heap_wp.
     iIntros "Hpt Hpost". 
     rewrite wp_unfold. unfold wp_pre.
     iIntros (σ) "Hsi".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
     iMod (si_free with "Hsi Hpt") as "Hsi".
     iApply fupd_mask_intro; first set_solver.
     iIntros "Hclose !>". iMod "Hclose". iModIntro.
@@ -470,8 +470,8 @@ Section heap_wp.
     iIntros "Hpt HPost".
     rewrite wp_unfold. unfold wp_pre.
     iIntros (σ) "Hsi".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
-    iMod (points_to_update with "Hsi Hpt") as "(Hsi & Hpt)".
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_put with "Hsi Hpt") as "(Hsi & Hpt)".
     iApply fupd_mask_intro; first set_solver.
     iIntros "Hclose !>". iMod "Hclose". iModIntro.
     iExists (<[l := v2]> σ), (v1, true). simpl.
@@ -491,7 +491,7 @@ Section heap_wp.
     iIntros "%Hneq Hpt HPost".
     rewrite wp_unfold. unfold wp_pre.
     iIntros (σ) "Hsi".
-    iDestruct (si_points_to_agree with "Hsi Hpt") as %Hsome.
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
     iApply fupd_mask_intro; first set_solver.
     iIntros "Hclose !>". iMod "Hclose". iModIntro.
     iExists  σ, (v1, false). simpl.
