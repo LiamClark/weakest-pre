@@ -46,7 +46,7 @@ Defined.
 
 Lemma wp_delay_unfold {Σ A} (e: delay A) (Φ: A -> iProp Σ): wp_delay e Φ ≡ wp_delay_pre wp_delay e Φ.
 Proof.
-  apply (fixpoint_unfold wp_delay_pre).
+   apply (fixpoint_unfold wp_delay_pre).
 Qed.
 
 Lemma wp_delay_return {Σ A} (x: A) (Φ: A -> iProp Σ): Φ x -∗ wp_delay (Answer x) Φ.
