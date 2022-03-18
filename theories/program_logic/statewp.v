@@ -180,10 +180,10 @@ Set Printing Coercions.
   abstract state.
 
  *)
- Section state_ad.
-  Context `{! inG Σ (heapR natO)}.
+Section state_ad.
+  Context `{! inG Σ (heapR V)}.
 
-  Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat nat) A) (st: gmap nat nat):
+  Lemma adequacy {A} (Q: A -> Prop) (prog : state (gmap nat V) A) (st: gmap nat V):
     (∀γ, ⊢ state_wp (state_interp γ) prog (λ x, ⌜Q x⌝)) ->
     ∃ x st', runState prog st = Some (x, st') /\ Q x.
   Proof.
@@ -195,7 +195,10 @@ Set Printing Coercions.
     - iMod (Hpre γ $! st with "Hγ") as (x σ' ?) "(Hsi & %)".
       eauto 10.
   Qed.
+End state_ad.
 
+Section state_verification.
+  Context `{! inG Σ (heapR nat)}.
   Definition prog_swap (l k: nat): state (gmap nat nat) unit := 
     x ← get l ;
     y ← get k ;
@@ -244,6 +247,6 @@ Set Printing Coercions.
     iApply (wp_put with "Hky"). iIntros "Hkx".
     iFrame.
     Qed.
-End state_ad.
+End state_verification.
 
 

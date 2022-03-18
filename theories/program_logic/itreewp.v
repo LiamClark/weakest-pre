@@ -374,7 +374,6 @@ Proof.
   auto.
 Qed.
 
-
 Lemma wp_think' {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) 
   (e: expr V R) (Φ: R -> iProp Σ)
   : wp SI E (Think e) Φ ={E, ∅}=∗ ▷ |={∅, E}=> wp SI E e Φ .
@@ -388,11 +387,11 @@ Qed.
 End itreewp.
 
 Section heap_wp.
-  Context `{! inG Σ (heapR natO)}.
+  Context `{! inG Σ (heapR V)}.
   Context `{!invGS Σ}.
   Context (γ: gname).
 
-  Lemma wp_get n v E (Ψ: nat -> iProp Σ) :
+  Lemma wp_get n v E (Ψ: V -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) E (itree.get n) Ψ.
   Proof.
     iIntros "Hpt Hpost".
@@ -462,7 +461,7 @@ Section heap_wp.
       by iApply wp_return.
   Qed.
 
-  Lemma wp_cas_suc l v1 v2 E (Φ: (nat * bool) -> iProp Σ):
+  Lemma wp_cas_suc l v1 v2 E (Φ: (V * bool) -> iProp Σ):
     points_to γ l v1
     -∗ ▷(points_to γ l v2  -∗ Φ (v1, true))
     -∗ wp (state_interp γ) E (itree.cmpXchg l v1 v2) Φ.
@@ -482,7 +481,7 @@ Section heap_wp.
       by iApply "HPost".
   Qed.
 
-  Lemma wp_cas_fail l v1 v2 v3 E (Φ: (nat * bool) -> iProp Σ):
+  Lemma wp_cas_fail l v1 v2 v3 E (Φ: (V * bool) -> iProp Σ):
     ⌜v1 <> v3⌝ -∗
     points_to γ l v1
     -∗ ▷(points_to γ l v1  -∗ Φ (v1, false))
@@ -505,7 +504,7 @@ End heap_wp.
 
 
 Section adequacy.
-  Context `{!inG Σ (heapR natO)}.
+  Context `{!inG Σ (heapR V)}.
   Context `{!invGS Σ}. 
 
   (*
@@ -522,10 +521,10 @@ Section adequacy.
     Except no. We do not take in account that Φ and Ψ are pure. They are any iProp predicates.
     Hence none of the soundness lemma's apply here.
   *)
-  Lemma step_expr_adequacy {R A} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ)
-    (h: heap nat)
-    (ts: list (thread nat R))
-    (e: expr nat A)
+  Lemma step_expr_adequacy {R A} {cmp: EqDecision V} (γ: gname) (Φ: R -> iProp Σ) (Ψ: A -> iProp Σ)
+    (h: heap V)
+    (ts: list (thread V R))
+    (e: expr V A)
     : wp (state_interp γ) ⊤ e Ψ
     -∗ state_interp γ h
     ={⊤, ∅}=∗ 
@@ -595,10 +594,10 @@ Section adequacy.
    Ψ is for the thread we are stepping. Ah so this is the above lifted to a thread.
    Φ is still the post condition for the main thread.
   *)
-  Lemma step_thread_adequacy {R} (γ: gname) (Φ Ψ: R -> iProp Σ)
-    (h: heap nat)
-    (ts: list (thread nat R))
-    (ct: thread nat R)
+  Lemma step_thread_adequacy {R} {cmp: EqDecision V} (γ: gname) (Φ Ψ: R -> iProp Σ)
+    (h: heap V)
+    (ts: list (thread V R))
+    (ct: thread V R)
     : wp_thread (state_interp γ) ct Ψ 
     -∗ state_interp γ h
     ={⊤, ∅}=∗ 
@@ -639,10 +638,10 @@ Section adequacy.
       Φ for the main thread. All the other threads namely have the trivial
       post condition
   *)
-  Lemma scheduled_adequacy {R} (γ: gname) (Φ: R -> iProp Σ)
-    (h: heap nat)
-    (s: scheduler nat R)
-    (ts: list (thread nat R))
+  Lemma scheduled_adequacy {R} {cmp: EqDecision V} (γ: gname) (Φ: R -> iProp Σ)
+    (h: heap V)
+    (s: scheduler V R)
+    (ts: list (thread V R))
     : ts ≠ [] ->
     state_interp γ h
     -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ)
@@ -677,7 +676,7 @@ Section adequacy.
 
   Arguments mbind_state : simpl never.
 
-  Lemma run_get_threads {V A} σ (ts: list (thread V A))
+  Lemma run_get_threads {A} σ (ts: list (thread V A))
     : runState get_threads σ ts = Here (ts, σ, ts).
   Proof.
     done.
@@ -699,7 +698,7 @@ Section adequacy.
   (*
     I need the conclusion to say something about how ts can be split up
   *)
-  Lemma check_main_head {A V: Type} (ts: list (thread V A)) (r: A)
+  Lemma check_main_head {A: Type} (ts: list (thread V A)) (r: A)
     : check_main ts = Some r -> ∃ts', ts = (Main $ Answer r) :: ts'.
     Proof.
       intro H.
@@ -726,10 +725,10 @@ Section adequacy.
     it should be iterating |==> ▷ |==>?
     is that legal? Yes, Yes it is.
   *)
-  Lemma fuel_adequacy {R} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
-    (h: heap nat)
-    (s: scheduler nat R)
-    (ts: list (thread nat R))
+  Lemma fuel_adequacy {R} {cmp: EqDecision V} (γ: gname) (Φ: R -> iProp Σ) (n: nat)
+    (h: heap V)
+    (s: scheduler V R)
+    (ts: list (thread V R))
     : ts ≠ [] -> 
     state_interp γ h
     -∗ ([∗ list] t ∈ ts, wp_thread (state_interp γ) t Φ) 
@@ -793,10 +792,10 @@ End adequacy.
      let's lift that.
      Now I need to get it in a big op
 *)
-Lemma adequacy {Σ} `{!inG Σ (heapR natO)} `{!invGpreS Σ} {R} (φ: R -> Prop) (n: nat)
-  (SI: gmap nat nat -> iProp Σ)
-  (s: scheduler nat R)
-  (e: expr nat R)
+Lemma adequacy {V Σ} {cmp: EqDecision V} `{!inG Σ (heapR V)} `{!invGpreS Σ} {R} (φ: R -> Prop) (n: nat)
+  (SI: gmap nat V -> iProp Σ)
+  (s: scheduler V R)
+  (e: expr V R)
   : (∀ `{!invGS Σ} γ, ⊢ wp (state_interp γ) ⊤ e (λ x, ⌜φ x⌝)) ->
   match run_program n s e with
   | Here x => φ x

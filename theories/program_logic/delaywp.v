@@ -295,11 +295,11 @@ Proof.
 Qed.
 End state_wp.
 
-Section state_wp_gp.
-  Context `{! inG Σ (heapR natO)}.
+Section delay_wp_heap.
+  Context `{! inG Σ (heapR V)}.
   Context (γ: gname).
   
-  Lemma wp_get n v (Ψ: nat -> iProp Σ) :
+  Lemma wp_get n v (Ψ: V -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ wp (state_interp γ) (get n) Ψ.
   Proof.
     iIntros "Hpt Hpost".
@@ -337,17 +337,17 @@ Section state_wp_gp.
     iMod (si_free with "Hsi Hpt") as "$".
     done.
   Qed.
-End state_wp_gp.
+End delay_wp_heap.
 
 
 Section state_delay_adequacy.
-  Context `{! inG Σ (heapR natO)}.
+  Context `{! inG Σ (heapR V)}.
 
   (* This allows the use of evaluation info from the outer stack,
     for the inner stack *)
   Lemma eval_state_eval_delay {A} (n: nat) (x: A)
-   (prog: state_delay (gmap nat nat) A)
-   (st st': gmap nat nat):  
+   (prog: state_delay (gmap nat V) A)
+   (st st': gmap nat V):  
    eval_state_delay' n prog st = Some (st', x) ->
    eval_delay n (runState prog st) = Some $ Some (st', x).
   Proof.
@@ -362,13 +362,13 @@ Section state_delay_adequacy.
   (* For adequacy we need the post condition wp uses for wp_delay, to change to a 
     pure assertion.*)
   Definition adapt_post {A} (φ: A -> Prop):
-    option (gmap nat nat * A) -> Prop :=
+    option (gmap nat V * A) -> Prop :=
      λ res, match res with
                 | Some (_, x) => φ x
                 | None => True
                 end.
 
-  Lemma adapt_pre {A} {γ} (φ: A -> Prop) (res: option (gmap nat nat * A)):
+  Lemma adapt_pre {A} {γ} (φ: A -> Prop) (res: option (gmap nat V * A)):
                      match res with
                      | Some (σ', x') => (state_interp γ σ' ∗ ⌜φ x'⌝)%I
                      | None => True%I
@@ -387,8 +387,8 @@ Section state_delay_adequacy.
   *) 
   Lemma adequacy_state_inbetween {A} (φ: A -> Prop) (n: nat) 
     (x: A) 
-    (prog : state_delay (gmap nat nat) A)
-    (st st': gmap nat nat):
+    (prog : state_delay (gmap nat V) A)
+    (st st': gmap nat V):
     (⊢ @wp_delay Σ _(runState prog st) (λ y, ⌜adapt_post φ y⌝)) ->
     (eval_delay n (runState prog st) = Some (Some (st', x)))
     -> (adapt_post φ (Some (st', x))).
@@ -397,8 +397,8 @@ Section state_delay_adequacy.
   Qed. 
  
   Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A) 
-    (prog : state_delay (gmap nat nat) A)
-    (st st': gmap nat nat)
+    (prog : state_delay (gmap nat V) A)
+    (st st': gmap nat V)
     : (∀γ, ⊢ wp (state_interp γ) prog (λ x, ⌜φ x⌝)) ->
     eval_state_delay' n prog st = Some (st', x) ->
     φ x. 
