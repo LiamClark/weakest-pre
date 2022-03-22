@@ -1,6 +1,7 @@
 From stdpp Require Import base gmap.
 From iris.algebra Require Import auth gmap excl.
 From iris.proofmode Require Import base tactics classes.
+From iris.bi Require Import derived_laws.
 From iris.base_logic.lib Require Export fancy_updates.
 From shiris.program_logic Require Import heapmodel modal itree evaluation.
 Set Default Proof Using "Type".
@@ -233,7 +234,6 @@ Proof.
     done.
 Qed.
 
-
 (* Check fupd_mask_mono. *)
 Lemma wp_strong_mono_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
@@ -282,6 +282,17 @@ Proof.
   - iIntros (v) "Hphi".
     iMod ("Hf" with "Hphi") as "Hf".
     iModIntro. done.
+Qed.
+
+Lemma wp_mono' {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
+   (e: expr V R) (Φ Ψ: R -> iProp Σ)
+   : (∀ v, Φ v -∗ Ψ v) -> wp SI E e Φ -∗  wp SI E e Ψ.
+Proof.
+  iIntros (Hv) "Hwp".
+  iApply (wp_strong_mono_fupd with "Hwp"); first set_solver.
+  - iIntros (v) "Hphi". 
+    iModIntro.
+    iApply (Hv with "Hphi").
 Qed.
 
 Lemma wp_mono {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
@@ -384,6 +395,23 @@ Proof.
   done.
 Qed.
 
+Lemma wp_frame_r {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) 
+  (e: expr V R) (Φ: R -> iProp Σ) (P: iProp Σ)
+  : ((wp SI E e Φ) ∗ P) ⊢ wp SI E e (λ v, Φ v ∗ P).
+  Proof.
+    iIntros "[Hwp Hp]".
+    iApply (wp_strong_mono_bupd with "Hwp").
+    auto with iFrame.
+  Qed.
+
+Lemma wp_frame_l {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset) 
+  (e: expr V R) (Φ: R -> iProp Σ) (P: iProp Σ)
+  : (P ∗ (wp SI E e Φ) ) ⊢ wp SI E e (λ v, P ∗ Φ v ).
+  Proof.
+    iIntros "[Hp Hwp]".
+    iApply (wp_strong_mono_bupd with "Hwp").
+    auto with iFrame.
+  Qed.
 End itreewp.
 
 Section heap_wp.
@@ -501,6 +529,77 @@ Section heap_wp.
       by iApply "HPost".
   Qed.
 End heap_wp.
+
+
+(** Proofmode class instances *)
+Section proofmode_classes.
+  Context `{!invGS Σ}.
+  Context `{!inG Σ (heapR V)}.
+  Context (A: Type).
+  Context (SI: gmap nat V -> iProp Σ).
+  Implicit Types P Q : iProp Σ.
+  Implicit Types Φ : A -> iProp Σ.
+  Implicit Types v : A.
+  Implicit Types e : expr V A.
+
+  Global Instance frame_wp p E e R Φ Ψ :
+    (∀ v, Frame p R (Φ v) (Ψ v)) →
+    Frame p R (wp SI E e Φ) (wp SI E e Ψ) | 2.
+  Proof. rewrite /Frame=> HR. rewrite wp_frame_l. apply wp_mono', HR.
+  Qed.
+
+  Global Instance is_except_0_wp E e Φ : IsExcept0 (wp SI E e Φ).
+  Proof. by rewrite /IsExcept0 -{2}fupd_wp -except_0_fupd -fupd_intro. Qed.
+
+  Global Instance elim_modal_bupd_wp p E e P Φ :
+    ElimModal True p false (|==> P) P (wp SI E e Φ) (wp SI E e Φ ).
+  Proof.
+    by rewrite /ElimModal bi.intuitionistically_if_elim
+      (bupd_fupd E) fupd_frame_r bi.wand_elim_r fupd_wp.
+  Qed.
+
+  Global Instance elim_modal_fupd_wp p E e P Φ :
+    ElimModal True p false (|={E}=> P) P (wp SI E e Φ ) (wp SI E e Φ).
+  Proof.
+    by rewrite /ElimModal bi.intuitionistically_if_elim
+      fupd_frame_r bi.wand_elim_r fupd_wp.
+  Qed.
+
+  Global Instance elim_modal_fupd_wp_atomic p E1 E2 e P Φ :
+    ElimModal (atomic e) p false
+            (|={E1,E2}=> P) P
+            (wp SI E1 e Φ) (wp SI E2 e (λ v, |={E2,E1}=> Φ v))%I | 100.
+  Proof.
+    intros ?. by rewrite bi.intuitionistically_if_elim
+      fupd_frame_r bi.wand_elim_r wp_atomic.
+  Qed.
+
+  Global Instance add_modal_fupd_wp E e P Φ :
+    AddModal (|={E}=> P) P (wp SI E e Φ).
+  Proof. by rewrite /AddModal fupd_frame_r bi.wand_elim_r fupd_wp. Qed.
+
+  Global Instance elim_acc_wp_atomic {X} E1 E2 α β γ e Φ :
+    ElimAcc (X:=X) (atomic e)
+            (fupd E1 E2) (fupd E2 E1)
+            α β γ (wp SI E1 e Φ)
+            (λ x, wp SI E2 e (λ v, |={E2}=> β x ∗ (γ x -∗? Φ v)))%I | 100.
+  Proof.
+    iIntros (?) "Hinner >Hacc". iDestruct "Hacc" as (x) "[Hα Hclose]".
+    iApply (wp_mono with "(Hinner Hα)").
+    iIntros (v) ">[Hβ HΦ]". iApply "HΦ". by iApply "Hclose".
+  Qed.
+
+  Global Instance elim_acc_wp_nonatomic {X} E α β γ e Φ :
+    ElimAcc (X:=X) True (fupd E E) (fupd E E)
+            α β γ (wp SI E e Φ)
+            (λ x, wp SI E e (λ v, |={E}=> β x ∗ (γ x -∗? Φ v)))%I.
+  Proof.
+    iIntros (_) "Hinner >Hacc". iDestruct "Hacc" as (x) "[Hα Hclose]".
+    iApply wp_fupd.
+    iApply (wp_mono with "(Hinner Hα)").
+    iIntros (v) ">[Hβ HΦ]". iApply "HΦ". by iApply "Hclose".
+  Qed.
+End proofmode_classes.
 
 
 Section adequacy.

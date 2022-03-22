@@ -73,4 +73,14 @@ Section lock_verification.
     - iModIntro. iApply ("Hpost"). done.
   Qed.
 
+
+  Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ) (E: coPset):
+    is_lock lk R -∗ (∀ b: bool, if b then True else R -∗ Φ b) -∗ wp (state_interp γ) E (try_aquire lk) Φ.
+  Proof.
+    iIntros "#Hlock HPost".
+    unfold is_lock.
+    unfold try_aquire. iApply wp_fmap. 
+    iInv "Hlock" as (c) "[Hl HR]" "Hclose".
+    iApply wp_cmpXchg
+  Qed.
 End lock_verification.
