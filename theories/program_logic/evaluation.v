@@ -169,7 +169,7 @@ Section heap_op.
   Definition free (n: nat): state V A unit :=
     modifyS $ delete n.
 
-  Definition cas {cmp: EqDecision V} (l: nat) (v1 v2: V): state V A (V * bool) :=
+  Definition cmpXchg {cmp: EqDecision V} (l: nat) (v1 v2: V): state V A (V * bool) :=
     get l ≫= λ vl, if decide (vl = v1) then put l v2 ;; mret (vl, true) else mret (vl, false).
 
 End heap_op.
@@ -182,7 +182,7 @@ Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
   | PutE l v        => λ k, k <$> put l v
   | AllocE v        => λ k, k <$> alloc v
   | FreeE l         => λ k, k <$> free l
-  | CmpXchgE l v v' => λ k, k <$> cas l v v'
+  | CmpXchgE l v v' => λ k, k <$> cmpXchg l v v'
   end.
 
 Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr V A) :=

@@ -18,6 +18,8 @@ Variant cell :=
 |Locked
 |UnLocked.
 
+Global Instance cell_inhabited: Inhabited (cell) := populate UnLocked.
+
 Definition new_lock: expr cell loc :=
   alloc UnLocked.
 
@@ -74,18 +76,27 @@ Section lock_verification.
   Qed.
 
 
-  Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ) (E: coPset):
-    is_lock lk R -∗ (∀ b: bool, if b then True else R -∗ Φ b) -∗ wp (state_interp γ) E (try_aquire lk) Φ.
+  Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ):
+    is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) -∗ wp (state_interp γ) ⊤ (try_aquire lk) Φ.
   Proof.
     iIntros "#Hlock HPost".
     unfold is_lock.
     unfold try_aquire. iApply wp_fmap. 
-    iInv "Hlock" as "Hl" "Hclose".
+    iInv "Hlock" as "Hinv" "Hclose".
     unfold lock_inv.
-    - admit.
-    - admit.
-    - iEval (unfold lock_inv) in "Hl".
-      iDestruct "Hl" as (c) "[Hpt HR]".
-    iApply wp_cmpXchg
+    - apply vis_atomic.
+    - iEval (unfold lock_inv) in "Hinv".
+      iDestruct "Hinv" as (c) "[Hpt HR]".
+      destruct (c) eqn: E.
+      + iApply (wp_cmpXchg_fail' _ _ Locked with "[] Hpt"); try done.
+        iIntros "!> Hpt".
+        iMod ("Hclose" with "[Hpt]") as "_".
+        { iNext. iExists Locked.  iFrame. }
+        iModIntro. iSimpl. by iApply ("HPost" $! false).
+      + iApply (wp_cmpXchg_suc' with "Hpt").
+        iIntros "!> Hpt".
+        iMod ("Hclose" with "[Hpt]") as "_".
+        { iNext. iExists Locked.  iFrame. }
+        iModIntro. iSimpl. iApply ("HPost" $! true with "HR") .
   Qed.
 End lock_verification.

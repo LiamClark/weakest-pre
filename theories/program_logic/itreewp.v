@@ -489,7 +489,7 @@ Section heap_wp.
       by iApply wp_return.
   Qed.
 
-  Lemma wp_cas_suc l v1 v2 E (Φ: (V * bool) -> iProp Σ):
+  Lemma wp_cmpXchg_suc l v1 v2 E (Φ: (V * bool) -> iProp Σ):
     points_to γ l v1
     -∗ ▷(points_to γ l v2  -∗ Φ (v1, true))
     -∗ wp (state_interp γ) E (itree.cmpXchg l v1 v2) Φ.
@@ -509,7 +509,28 @@ Section heap_wp.
       by iApply "HPost".
   Qed.
 
-  Lemma wp_cas_fail l v1 v2 v3 E (Φ: (V * bool) -> iProp Σ):
+  Lemma wp_cmpXchg_suc' l v1 v2 E (Φ: (V * bool) -> iProp Σ):
+    ▷ points_to γ l v1
+    -∗ ▷(points_to γ l v2  -∗ Φ (v1, true))
+    -∗ wp (state_interp γ) E (itree.cmpXchg l v1 v2) Φ.
+  Proof.
+    iIntros "Hpt HPost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". 
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_put with "Hsi Hpt") as "(Hsi & Hpt)".
+    iMod "Hclose". iModIntro.
+    iExists (<[l := v2]> σ), (v1, true). simpl.
+    iSplit.
+    - by iPureIntro.
+    - iFrame.
+      iApply wp_return.
+      by iApply "HPost".
+  Qed.
+
+  Lemma wp_cmpXchg_fail l v1 v2 v3 E (Φ: (V * bool) -> iProp Σ):
     ⌜v1 <> v3⌝ -∗
     points_to γ l v1
     -∗ ▷(points_to γ l v1  -∗ Φ (v1, false))
@@ -528,6 +549,27 @@ Section heap_wp.
       iApply wp_return.
       by iApply "HPost".
   Qed.
+ 
+  Lemma wp_cmpXchg_fail' l v1 v2 v3 E (Φ: (V * bool) -> iProp Σ):
+    ⌜v1 <> v3⌝ -∗
+    ▷ points_to γ l v1
+    -∗ ▷ (points_to γ l v1  -∗ Φ (v1, false))
+    -∗ wp (state_interp γ) E (itree.cmpXchg l v3 v2) Φ.
+  Proof.
+    iIntros "%Hneq Hpt HPost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi".
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iExists  σ, (v1, false). simpl.
+    iSplit.
+    - iPureIntro. by exists v1.
+    - iFrame.
+      iApply wp_return.
+      by iApply "HPost".
+  Qed.
+
 End heap_wp.
 
 
@@ -674,14 +716,14 @@ Section adequacy.
         iFrame. auto.
       + destruct v as [vret [|]]; simpl in H.
         * destruct H as (HLookup & -> & ->).
-        unfold step_vis. unfold cas.
+        unfold step_vis. unfold cmpXchg.
         simpl.
         rewrite HLookup. simpl.
         rewrite decide_True //. simpl.
         iExists []. rewrite right_id_L.
         iFrame. auto.
         * destruct H as (x & HLookup & -> & -> & Hneq).
-          unfold step_vis. unfold cas. simpl.
+          unfold step_vis. unfold cmpXchg. simpl.
           rewrite HLookup. simpl.
           rewrite decide_False //.
           iExists []. rewrite right_id_L.
