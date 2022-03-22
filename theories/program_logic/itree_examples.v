@@ -80,7 +80,12 @@ Section lock_verification.
     iIntros "#Hlock HPost".
     unfold is_lock.
     unfold try_aquire. iApply wp_fmap. 
-    iInv "Hlock" as (c) "[Hl HR]" "Hclose".
+    iInv "Hlock" as "Hl" "Hclose".
+    unfold lock_inv.
+    - admit.
+    - admit.
+    - iEval (unfold lock_inv) in "Hl".
+      iDestruct "Hl" as (c) "[Hpt HR]".
     iApply wp_cmpXchg
   Qed.
 End lock_verification.
