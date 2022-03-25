@@ -114,15 +114,16 @@ Section lock_verification.
   Qed.
 
   Lemma release_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
-    is_lock lk R -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
+    (is_lock lk R ∗ R) -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
   Proof.
-    iIntros "#Hlock Hpost".
+    iIntros "(#Hlock & Hr) Hpost".
     iInv "Hlock" as (c) "[Hl HR]" "Hclose".
     { apply vis_atomic. }
     iApply (wp_put' with "Hl").
     iIntros "!> Hpt".
-    iMod ("Hclose" with "[Hpt HR]") as "_".
-    { iNext.  iExists UnLocked. } 
+    iMod ("Hclose" with "[Hpt Hr]") as "_".
+    { iNext. iExists UnLocked. iFrame. } 
+    by iApply "Hpost".
   Qed.
 
 End lock_verification.
