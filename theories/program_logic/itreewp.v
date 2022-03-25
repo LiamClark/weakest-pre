@@ -452,6 +452,26 @@ Section heap_wp.
       by iApply "Hpost".
   Qed. 
 
+  Lemma wp_put' n v v' E (Ψ: unit -> iProp Σ) :
+    ▷ points_to γ n v -∗ ▷ (points_to γ n v' -∗ Ψ tt) -∗ wp (state_interp γ) E (itree.put n v') Ψ.
+  Proof.
+    iIntros "Hpt Hpost".
+    rewrite wp_unfold. unfold wp_pre.
+    iIntros (σ) "Hsi". 
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>".
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.   
+    iMod (si_put with "Hsi Hpt") as "(Hsi & Hpt)". 
+    iMod "Hclose". iModIntro.
+    iExists (<[n := v']> σ), tt. simpl.
+    iSplit.
+    - iPureIntro. split.
+      + apply (mk_is_Some _ _ Hsome).
+      + done.
+    - iFrame. iApply wp_return.
+      by iApply "Hpost".
+  Qed. 
+
   Lemma wp_alloc v E (Ψ: nat -> iProp Σ):
     (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) E (itree.alloc v) Ψ.
   Proof.

@@ -79,7 +79,7 @@ Section lock_verification.
   Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ):
     is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) -∗ wp (state_interp γ) ⊤ (try_aquire lk) Φ.
   Proof.
-    iIntros "#Hlock HPost".
+    iIntros "#Hlock Hpost".
     unfold is_lock.
     unfold try_aquire. iApply wp_fmap. 
     iInv "Hlock" as "Hinv" "Hclose".
@@ -92,11 +92,37 @@ Section lock_verification.
         iIntros "!> Hpt".
         iMod ("Hclose" with "[Hpt]") as "_".
         { iNext. iExists Locked.  iFrame. }
-        iModIntro. iSimpl. by iApply ("HPost" $! false).
+        iModIntro. iSimpl. by iApply ("Hpost" $! false).
       + iApply (wp_cmpXchg_suc' with "Hpt").
         iIntros "!> Hpt".
         iMod ("Hclose" with "[Hpt]") as "_".
         { iNext. iExists Locked.  iFrame. }
-        iModIntro. iSimpl. iApply ("HPost" $! true with "HR") .
+        iModIntro. iSimpl. iApply ("Hpost" $! true with "HR") .
   Qed.
+
+  Lemma aqcuire_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
+    is_lock lk R -∗ (R -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (acquire lk) Φ.
+  Proof.
+    iIntros "#Hlock Hpost".
+    iLöb as "IH".
+    iApply wp_iter. iApply wp_bind. 
+    iApply (try_aquire_spec with "Hlock"). 
+    iIntros (b) "HR".
+    destruct b.
+    - iApply wp_return. iApply ("Hpost" with "HR"). 
+    - iApply wp_return. iSimpl. iNext. iApply ("IH" with "Hpost").
+  Qed.
+
+  Lemma release_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
+    is_lock lk R -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
+  Proof.
+    iIntros "#Hlock Hpost".
+    iInv "Hlock" as (c) "[Hl HR]" "Hclose".
+    { apply vis_atomic. }
+    iApply (wp_put' with "Hl").
+    iIntros "!> Hpt".
+    iMod ("Hclose" with "[Hpt HR]") as "_".
+    { iNext.  iExists UnLocked. } 
+  Qed.
+
 End lock_verification.
