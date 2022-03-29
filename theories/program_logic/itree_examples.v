@@ -16,7 +16,8 @@ Definition loop_prog {A}: expr nat A :=
 
 Variant cell :=
 |Locked
-|UnLocked.
+|UnLocked
+|Value (n: nat).
 
 Global Instance cell_inhabited: Inhabited (cell) := populate UnLocked.
 
@@ -53,6 +54,7 @@ Section lock_verification.
       match c with
       | Locked => True
       | UnLocked => R
+      | Nat => False
       end
     )%I.
 
@@ -98,7 +100,9 @@ Section lock_verification.
         iMod ("Hclose" with "[Hpt]") as "_".
         { iNext. iExists Locked.  iFrame. }
         iModIntro. iSimpl. iApply ("Hpost" $! true with "HR") .
-  Qed.
+        + iApply (wp_cmpXchg_fail' _ _ (Value n) with "[] Hpt"); try done.
+          iNext. iExFalso. iApply "HR".
+    Qed.
 
   Lemma aqcuire_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
     is_lock lk R -∗ (R -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (acquire lk) Φ.
@@ -127,3 +131,46 @@ Section lock_verification.
   Qed.
 
 End lock_verification.
+
+Section bank.
+
+  Definition onValue (c: cell) (f: nat -> expr cell ()): expr cell () :=
+    match c with
+    | Locked => mret ()
+    | UnLocked => mret ()
+    | Value n => f n
+    end.
+
+  Definition getValue (c: cell) : expr cell (option nat) :=
+    match c with
+    | Locked => mret $ None 
+    | UnLocked => mret $ None 
+    | Value n => mret $ Some $  n
+    end.
+
+
+  Definition withdraw (amount: nat) (balanceLoc: loc): expr cell () :=
+    balanceCell ← get balanceLoc;
+    onValue balanceCell (λ balance, 
+      if (amount <=? balance) 
+      then put balanceLoc (Value (balance - amount)) else mret () 
+    ).
+
+
+  Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
+    acquire balanceLoc ;; withdraw amount balanceLoc ;; release balanceLoc.
+
+  Definition bank_prog: expr cell (option nat) :=
+    balanceLoc  ← alloc (Value 100) ; 
+    lockLoc     ← new_lock ; 
+    Fork 
+      (withdrawLocked 5  lockLoc balanceLoc ;; withdrawLocked 25 lockLoc balanceLoc) 
+      ( withdrawLocked 20 lockLoc balanceLoc ;;
+        withdrawLocked 2  lockLoc balanceLoc ;;  
+        withdrawLocked 10 lockLoc balanceLoc ;; 
+        c ← get balanceLoc ;
+        getValue c)
+      .
+
+End bank.
+
