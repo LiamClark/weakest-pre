@@ -130,6 +130,19 @@ Section lock_verification.
     by iApply "Hpost".
   Qed.
 
+  Lemma release_spec' (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
+    is_lock lk R -∗ R -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
+  Proof.
+    iIntros "#Hlock Hr Hpost".
+    iInv "Hlock" as (c) "[Hl HR]" "Hclose".
+    { apply vis_atomic. }
+    iApply (wp_put' with "Hl").
+    iIntros "!> Hpt".
+    iMod ("Hclose" with "[Hpt Hr]") as "_".
+    { iNext. iExists UnLocked. iFrame. } 
+    by iApply "Hpost".
+  Qed.
+
 End lock_verification.
 
 Section bank.
@@ -181,8 +194,20 @@ Section bank_verification.
   Context {γ: gname}.
 
   Locate "<=?".
-  Search le Nat.leb.
+  Search le.
+  Search (?n <= ?m \/ _).
+  Check Nat.le_gt_cases.
+  Search (?n <= ?m -> ¬ _).
+  (*
+   I need to arrive at <=? = false
+  I did that using: Nat.leb: n <=? m = false <-> ¬ n <= m *)
   Check Nat.leb_le.
+  (* I however have m < n from le_gt_cases.
+  Thus I need m < n -> ¬ (n <= m)  *) 
+  Search (?m < ?n -> ¬ (?n <= ?m)).
+  Check lt_not_le.
+  Check le_not_lt.
+  Search le Nat.leb.
 
   Lemma withdraw_spec_suc n n' lval (Φ: () -> iProp Σ)
   : n' <= n ->
@@ -208,18 +233,25 @@ Section bank_verification.
     iApply wp_return. iApply ("Hpost" with "Hpt").
   Qed.
 
-  Lemma withdraw_locked_suc_spec n n' lval llock (Φ: () -> iProp Σ)
-  : n' <= n ->
-  (@is_lock _ _ _ γ llock (points_to γ lval (Value n)))
+  Lemma withdraw_locked_suc_spec n' lval llock (Φ: () -> iProp Σ)
+  : (@is_lock _ _ _ γ llock (∃n, points_to γ lval (Value n)))
+  -∗ (True -∗ Φ ())
   -∗ wp (state_interp γ) ⊤ (withdrawLocked n' llock lval) Φ.
   Proof.
-    iIntros (Hle) "#Hlock". unfold withdrawLocked.
+    iIntros "#Hlock Hpost". unfold withdrawLocked.
     iApply wp_bind. iApply (aqcuire_spec with "Hlock").
-    iIntros "Hpt". iApply wp_bind. 
-    iApply (withdraw_spec_suc _ _ _ _ Hle  with "Hpt"). iIntros "Hpt".
-    iApply (release_spec with "Hlock" ).
-
-  Admitted.
+    iIntros "(%n & Hpt)". iApply wp_bind. 
+    destruct (Nat.le_gt_cases n' n).
+    - iApply (withdraw_spec_suc _ _ _ _ H  with "Hpt"). iIntros "Hpt".
+      iApply (release_spec' with "Hlock [Hpt]").
+      { by iExists (n - n'). }
+      done.
+    - apply lt_not_le in H. 
+      iApply (withdraw_spec_fail _ _ _ _ H with "Hpt"). iIntros "Hpt".
+      iApply (release_spec' with "Hlock [Hpt]").
+      { by iExists n. }
+      iApply "Hpost".
+  Qed.
 
 
   Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) 
