@@ -412,6 +412,16 @@ Lemma wp_frame_l {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
     iApply (wp_strong_mono_bupd with "Hwp").
     auto with iFrame.
   Qed.
+
+  Lemma wp_fork {V R: Type} (SI: gmap nat V -> iProp Σ) (e1: expr V ()) (e2: expr V R) (E: coPset) (Φ: R -> iProp Σ):
+   ▷ wp SI  ⊤ e1 (λ _, True) -∗ wp SI E e2 Φ -∗  wp SI E (Fork e1 e2) Φ.
+  Proof.
+    iIntros "Hwpf HwpΦ".
+    iEval( rewrite wp_unfold). unfold wp_pre.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iFrame.
+  Qed.
 End itreewp.
 
 Section heap_wp.
@@ -589,6 +599,7 @@ Section heap_wp.
       iApply wp_return.
       by iApply "HPost".
   Qed.
+
 
 End heap_wp.
 
