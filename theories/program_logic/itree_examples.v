@@ -158,7 +158,7 @@ Section bank.
 
 
   Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
-    acquire balanceLoc ;; withdraw amount balanceLoc ;; release balanceLoc.
+    acquire lockLoc ;; withdraw amount balanceLoc ;; release lockLoc.
 
   Definition bank_prog: expr cell (option nat) :=
     balanceLoc  ← alloc (Value 100) ; 
@@ -174,3 +174,67 @@ Section bank.
 
 End bank.
 
+
+Section bank_verification.
+  Context `{! inG Σ (heapR cell)}.
+  Context `{! invGS Σ}.
+  Context {γ: gname}.
+
+  Locate "<=?".
+  Search le Nat.leb.
+  Check Nat.leb_le.
+
+  Lemma withdraw_spec_suc n n' lval (Φ: () -> iProp Σ)
+  : n' <= n ->
+  points_to γ lval (Value n)
+  -∗ (points_to γ lval (Value (n - n')) -∗ Φ ())
+  -∗ wp (state_interp γ) ⊤ (withdraw n' lval) Φ.
+  Proof.
+    iIntros (Hle) "Hpt Hpost". 
+    iApply wp_bind. iApply (wp_get with "Hpt"). iIntros "Hpt".
+    iSimpl. apply Nat.leb_le in Hle. rewrite Hle.
+    iApply (wp_put with "Hpt"). iApply "Hpost".
+  Qed.
+
+  Lemma withdraw_spec_fail n n' lval (Φ: () -> iProp Σ)
+  : ¬(n' <= n) ->
+  points_to γ lval (Value n)
+  -∗ (points_to γ lval (Value n) -∗ Φ ())
+  -∗ wp (state_interp γ) ⊤ (withdraw n' lval) Φ.
+  Proof.
+    iIntros (Hle) "Hpt Hpost". 
+    iApply wp_bind. iApply (wp_get with "Hpt"). iIntros "Hpt".
+    iSimpl. apply Nat.leb_nle in Hle. rewrite Hle.
+    iApply wp_return. iApply ("Hpost" with "Hpt").
+  Qed.
+
+  Lemma withdraw_locked_suc_spec n n' lval llock (Φ: () -> iProp Σ)
+  : n' <= n ->
+  (@is_lock _ _ _ γ llock (points_to γ lval (Value n)))
+  -∗ wp (state_interp γ) ⊤ (withdrawLocked n' llock lval) Φ.
+  Proof.
+    iIntros (Hle) "#Hlock". unfold withdrawLocked.
+    iApply wp_bind. iApply (aqcuire_spec with "Hlock").
+    iIntros "Hpt". iApply wp_bind. 
+    iApply (withdraw_spec_suc _ _ _ _ Hle  with "Hpt"). iIntros "Hpt".
+    iApply (release_spec with "Hlock" ).
+
+  Admitted.
+
+
+  Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) 
+     (λ balanceOpt,
+      match balanceOpt with
+      | Some balance => ⌜balance = 38⌝
+      | None => False
+      end)%I.
+  Proof.
+    iApply wp_bind.
+    iApply wp_alloc. iIntros (lval) "Hval".
+    iApply wp_bind.
+    iApply (new_lock_spec with "Hval"). iIntros (llock) "#Hinv".
+    iApply wp_fork.
+    - iNext. iApply wp_bind. iApply wp_a
+    -
+  Qed.
+End bank_verification.
