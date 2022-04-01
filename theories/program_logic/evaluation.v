@@ -174,7 +174,6 @@ Section heap_op.
 
 End heap_op.
 
-
 Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
  (T -> expr V A) -> state V R (expr V A) :=
   match c with
@@ -183,6 +182,7 @@ Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
   | AllocE v        => λ k, k <$> alloc v
   | FreeE l         => λ k, k <$> free l
   | CmpXchgE l v v' => λ k, k <$> cmpXchg l v v'
+  | FailE           => λ k, lift_error fail_prog
   end.
 
 Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr V A) :=

@@ -19,6 +19,7 @@ refine (
   | FreeE l          => λ _, is_Some (σ !! l) /\ σ' = delete l σ
   | CmpXchgE l v1 v2 => λ '(vret, upd), if upd then σ !! l = Some v1 /\ vret = v1 /\ σ' = <[l := v2]> σ  
                                    else ∃x, σ !! l = Some x /\ vret = x /\ σ = σ' /\ x ≠ v1
+  | FailE            => λ v, False
   end
 ).
 Defined.
@@ -769,6 +770,7 @@ Section adequacy.
           rewrite decide_False //.
           iExists []. rewrite right_id_L.
           iFrame. auto.
+      +  iModIntro. done.
   Qed.
 
   (* 
