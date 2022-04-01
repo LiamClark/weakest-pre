@@ -8,7 +8,7 @@ Require Import Unicode.Utf8.
 CoInductive itree (E: Type -> Type) (R: Type): Type :=
 | Answer: R -> itree E R  
 | Think: itree E R -> itree E R 
-| Fork: itree E () ->  itree E R -> itree E R
+| Fork: itree E () -> itree E R -> itree E R
 | Vis: ∀{A: Type}, E A -> (A -> itree E R) -> itree E R.
 
 Arguments Answer {_ _}.
@@ -24,7 +24,8 @@ Variant envE (V : Type): Type -> Type :=
 |PutE:      loc -> V -> envE V ()
 |AllocE:    V -> envE V loc 
 |FreeE:     loc -> envE V ()
-|CmpXchgE:  loc -> V -> V -> envE V (V * bool).
+|CmpXchgE:  loc -> V -> V -> envE V (V * bool)
+|FailE:     ∀R, envE V R.
 
 
 Arguments GetE {_}.
@@ -32,6 +33,7 @@ Arguments PutE {_}.
 Arguments AllocE {_}.
 Arguments FreeE {_}.
 Arguments CmpXchgE {_}.
+Arguments FailE {_ _}.
 
 (* Definition expr (V: Type) {cmp: EqDecision V} := itree (envE V).  *)
 Definition expr (V: Type) := itree (envE V). 
@@ -40,6 +42,8 @@ Definition get {V} (l: loc): expr V V := Vis (GetE l) Answer.
 Definition put {V} (l: loc) (v: V): expr V () := Vis (PutE l v) Answer .
 Definition alloc {V} (v: V): expr V loc := Vis (AllocE v) Answer.
 Definition free {V} (l: loc): expr V () := Vis (FreeE l) Answer.
+Definition fork {V} (e: expr V ()): expr V () := Fork e (Answer ()).
+Definition fail {V R}: expr V R := Vis FailE Answer.
 Definition cmpXchg {V} (l: loc) (v1 v2: V): expr V (V * bool) := Vis (CmpXchgE l v1 v2) Answer.
 
 (* Apply the continuation k to the Ret nodes of the itree t *)

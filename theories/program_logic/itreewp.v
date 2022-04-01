@@ -413,7 +413,7 @@ Lemma wp_frame_l {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
     auto with iFrame.
   Qed.
 
-  Lemma wp_fork {V R: Type} (SI: gmap nat V -> iProp Σ) (e1: expr V ()) (e2: expr V R) (E: coPset) (Φ: R -> iProp Σ):
+  (* Lemma wp_fork {V R: Type} (SI: gmap nat V -> iProp Σ) (e1: expr V ()) (e2: expr V R) (E: coPset) (Φ: R -> iProp Σ):
    ▷ wp SI  ⊤ e1 (λ _, True) -∗ wp SI E e2 Φ -∗  wp SI E (Fork e1 e2) Φ.
   Proof.
     iIntros "Hwpf HwpΦ".
@@ -421,6 +421,16 @@ Lemma wp_frame_l {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
     iApply fupd_mask_intro; first set_solver.
     iIntros "Hclose !>". iMod "Hclose". iModIntro.
     iFrame.
+  Qed. *)
+
+  Lemma wp_fork {V R: Type} (SI: gmap nat V -> iProp Σ) (e: expr V ()) (E: coPset) (Φ: () -> iProp Σ):
+   ▷ wp SI ⊤ e (λ _, True) -∗ Φ () -∗ wp SI E (itree.fork e) Φ.
+  Proof.
+    iIntros "Hwpf HΦ".
+    iEval( rewrite wp_unfold). unfold wp_pre.
+    iApply fupd_mask_intro; first set_solver.
+    iIntros "Hclose !>". iMod "Hclose". iModIntro.
+    iFrame. by iApply wp_return.
   Qed.
 End itreewp.
 

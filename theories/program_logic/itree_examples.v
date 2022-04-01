@@ -49,14 +49,13 @@ Section lock_verification.
   Context {γ: gname}.
 
   Definition lock_inv (l: loc) (R: iProp Σ): iProp Σ :=
-    (∃ c: cell, 
+    ∃ c: cell, 
       points_to γ l c ∗
       match c with
       | Locked => True
       | UnLocked => R
       | Nat => False
-      end
-    )%I.
+      end.
 
   Definition lockN: namespace := nroot .@ "lock".
 
@@ -68,13 +67,13 @@ Section lock_verification.
     ∀ Φ, P -∗ (Q -∗ Φ v) -∗ WP e {{ v, Φ v }}
   *)
   Lemma new_lock_spec (Φ: loc -> iProp Σ) (R: iProp Σ) (E: coPset):
-    R -∗ (∀l, is_lock l R -∗ Φ l) -∗ wp (state_interp γ) E new_lock (Φ).
+    R -∗ (∀l, is_lock l R -∗ Φ l) -∗ wp (state_interp γ) E new_lock Φ.
   Proof.
     iIntros "R Hpost". iApply wp_fupd.
     iApply wp_alloc. iIntros (l) "Hpt".
     iMod (inv_alloc lockN _ (lock_inv l R) with "[R Hpt]") as "Hinv".
     - iNext. iExists UnLocked. iFrame.
-    - iModIntro. iApply ("Hpost"). done.
+    - iModIntro. iApply "Hpost". done.
   Qed.
 
 
@@ -118,19 +117,6 @@ Section lock_verification.
   Qed.
 
   Lemma release_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
-    (is_lock lk R ∗ R) -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
-  Proof.
-    iIntros "(#Hlock & Hr) Hpost".
-    iInv "Hlock" as (c) "[Hl HR]" "Hclose".
-    { apply vis_atomic. }
-    iApply (wp_put' with "Hl").
-    iIntros "!> Hpt".
-    iMod ("Hclose" with "[Hpt Hr]") as "_".
-    { iNext. iExists UnLocked. iFrame. } 
-    by iApply "Hpost".
-  Qed.
-
-  Lemma release_spec' (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
     is_lock lk R -∗ R -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
   Proof.
     iIntros "#Hlock Hr Hpost".
@@ -142,15 +128,14 @@ Section lock_verification.
     { iNext. iExists UnLocked. iFrame. } 
     by iApply "Hpost".
   Qed.
-
 End lock_verification.
 
 Section bank.
 
   Definition onValue (c: cell) (f: nat -> expr cell ()): expr cell () :=
     match c with
-    | Locked => mret ()
-    | UnLocked => mret ()
+    | Locked => fail
+    | UnLocked => fail 
     | Value n => f n
     end.
 
@@ -162,16 +147,18 @@ Section bank.
     end.
 
 
-  Definition withdraw (amount: nat) (balanceLoc: loc): expr cell () :=
+  Definition withdraw (amount: nat) (balanceLoc: loc): expr cell bool :=
     balanceCell ← get balanceLoc;
     onValue balanceCell (λ balance, 
       if (amount <=? balance) 
-      then put balanceLoc (Value (balance - amount)) else mret () 
+      then put balanceLoc (Value (balance - amount)) ;; mret true else mret false 
     ).
 
 
   Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
-    acquire lockLoc ;; withdraw amount balanceLoc ;; release lockLoc.
+    acquire lockLoc ;; 
+    b ← withdraw amount balanceLoc ;;
+    if b then  release lockLoc else fail.
 
   Definition bank_prog: expr cell (option nat) :=
     balanceLoc  ← alloc (Value 100) ; 
@@ -192,7 +179,7 @@ Section bank_verification.
   Context `{! inG Σ (heapR cell)}.
   Context `{! invGS Σ}.
   Context {γ: gname}.
-
+(* 
   Locate "<=?".
   Search le.
   Search (?n <= ?m \/ _).
@@ -207,7 +194,8 @@ Section bank_verification.
   Search (?m < ?n -> ¬ (?n <= ?m)).
   Check lt_not_le.
   Check le_not_lt.
-  Search le Nat.leb.
+  Search le Nat.leb. *)
+
 
   Lemma withdraw_spec_suc n n' lval (Φ: () -> iProp Σ)
   : n' <= n ->
@@ -233,9 +221,19 @@ Section bank_verification.
     iApply wp_return. iApply ("Hpost" with "Hpt").
   Qed.
 
+  (* ● γ 100
+  ◯ γ 60
+  ◯ γ 40 *)
+
+  (* ● γ n ∗ ◯ γ m -∗ m <= n.
+  ● γ n ∗ ◯ γ m -∗ |==>  ● γ (n - m).
+  ◯ γ (n + m) ⊣⊢ (◯ γ n ∗ ◯ γ m).
+  True -∗ |==> ∃ γ, ● γ n ∗ ◯ γ n *)
+
   Lemma withdraw_locked_suc_spec n' lval llock (Φ: () -> iProp Σ)
-  : (@is_lock _ _ _ γ llock (∃n, points_to γ lval (Value n)))
+  : (@is_lock _ _ _ γ llock (∃n, points_to γ lval (Value n) ∗ ● γ1 n))
   -∗ (True -∗ Φ ())
+  -∗ ◯ γ1 n' 
   -∗ wp (state_interp γ) ⊤ (withdrawLocked n' llock lval) Φ.
   Proof.
     iIntros "#Hlock Hpost". unfold withdrawLocked.
@@ -243,7 +241,7 @@ Section bank_verification.
     iIntros "(%n & Hpt)". iApply wp_bind. 
     destruct (Nat.le_gt_cases n' n).
     - iApply (withdraw_spec_suc _ _ _ _ H  with "Hpt"). iIntros "Hpt".
-      iApply (release_spec' with "Hlock [Hpt]").
+      iApply (release_spec with "Hlock [Hpt]").
       { by iExists (n - n'). }
       done.
     - apply lt_not_le in H. 
