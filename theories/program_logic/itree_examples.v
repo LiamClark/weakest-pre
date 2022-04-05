@@ -1,4 +1,5 @@
 From stdpp Require Import base. 
+From iris.algebra Require Import lib.frac_auth numbers auth.
 From iris.proofmode Require Import proofmode.
 From iris.base_logic.lib Require Import invariants.
 From shiris.program_logic Require Import evaluation heapmodel itree itreewp.
@@ -76,7 +77,6 @@ Section lock_verification.
     - iModIntro. iApply "Hpost". done.
   Qed.
 
-
   Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ):
     is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) -∗ wp (state_interp γ) ⊤ (try_aquire lk) Φ.
   Proof.
@@ -132,11 +132,11 @@ End lock_verification.
 
 Section bank.
 
-  Definition onValue (c: cell) (f: nat -> expr cell ()): expr cell () :=
+  Definition asValue (c: cell): expr cell nat :=
     match c with
-    | Locked => fail
-    | UnLocked => fail 
-    | Value n => f n
+    | Locked => itree.fail
+    | UnLocked => itree.fail 
+    | Value n => mret n
     end.
 
   Definition getValue (c: cell) : expr cell (option nat) :=
@@ -149,16 +149,16 @@ Section bank.
 
   Definition withdraw (amount: nat) (balanceLoc: loc): expr cell bool :=
     balanceCell ← get balanceLoc;
-    onValue balanceCell (λ balance, 
-      if (amount <=? balance) 
-      then put balanceLoc (Value (balance - amount)) ;; mret true else mret false 
-    ).
-
+    balance ← asValue balanceCell ; 
+    if (amount <=? balance) 
+    then put balanceLoc (Value (balance - amount)) ;; mret true 
+    else mret false.
 
   Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
+    let ret: bool -> expr cell () :=  λ (b: bool), if b then release lockLoc else itree.fail in
     acquire lockLoc ;; 
-    b ← withdraw amount balanceLoc ;;
-    if b then  release lockLoc else fail.
+    ( b ) ← withdraw amount balanceLoc ;
+    ret b.
 
   Definition bank_prog: expr cell (option nat) :=
     balanceLoc  ← alloc (Value 100) ; 
@@ -171,14 +171,27 @@ Section bank.
         c ← get balanceLoc ;
         getValue c)
       .
-
 End bank.
+
+Class ccounterG Σ :=
+  CCounterG { ccounter_inG : inG Σ (frac_authR natR) }.
+Local Existing Instance ccounter_inG.
+
+Definition ccounterΣ : gFunctors :=
+  #[GFunctor (frac_authR natR)].
+
+Global Instance subG_ccounterΣ {Σ} : subG ccounterΣ Σ → ccounterG Σ.
+Proof. solve_inG. Qed.
+
 
 
 Section bank_verification.
   Context `{! inG Σ (heapR cell)}.
   Context `{! invGS Σ}.
+  Context `{! ccounterG Σ }.
+  Context `{! inG Σ (viewR auth_view_rel)}.
   Context {γ: gname}.
+  Context {γc: gname}.
 (* 
   Locate "<=?".
   Search le.
@@ -196,29 +209,21 @@ Section bank_verification.
   Check le_not_lt.
   Search le Nat.leb. *)
 
+  Definition ccounter_inv (l : loc) : iProp Σ :=
+    ∃ n, own γc (● n) ∗ points_to γ l (Value n).
 
-  Lemma withdraw_spec_suc n n' lval (Φ: () -> iProp Σ)
+  Lemma withdraw_spec_suc n n' lval (Φ: bool -> iProp Σ)
   : n' <= n ->
   points_to γ lval (Value n)
-  -∗ (points_to γ lval (Value (n - n')) -∗ Φ ())
+  -∗ (points_to γ lval (Value (n - n')) -∗ Φ true)
   -∗ wp (state_interp γ) ⊤ (withdraw n' lval) Φ.
   Proof.
     iIntros (Hle) "Hpt Hpost". 
     iApply wp_bind. iApply (wp_get with "Hpt"). iIntros "Hpt".
-    iSimpl. apply Nat.leb_le in Hle. rewrite Hle.
-    iApply (wp_put with "Hpt"). iApply "Hpost".
-  Qed.
-
-  Lemma withdraw_spec_fail n n' lval (Φ: () -> iProp Σ)
-  : ¬(n' <= n) ->
-  points_to γ lval (Value n)
-  -∗ (points_to γ lval (Value n) -∗ Φ ())
-  -∗ wp (state_interp γ) ⊤ (withdraw n' lval) Φ.
-  Proof.
-    iIntros (Hle) "Hpt Hpost". 
-    iApply wp_bind. iApply (wp_get with "Hpt"). iIntros "Hpt".
-    iSimpl. apply Nat.leb_nle in Hle. rewrite Hle.
-    iApply wp_return. iApply ("Hpost" with "Hpt").
+    iApply wp_bind. iApply wp_return.
+    apply Nat.leb_le in Hle. rewrite Hle.
+    iApply wp_bind. iApply (wp_put with "Hpt"). 
+    iIntros "Hpt". iApply wp_return. by iApply "Hpost".
   Qed.
 
   (* ● γ 100
@@ -230,10 +235,14 @@ Section bank_verification.
   ◯ γ (n + m) ⊣⊢ (◯ γ n ∗ ◯ γ m).
   True -∗ |==> ∃ γ, ● γ n ∗ ◯ γ n *)
 
-  Lemma withdraw_locked_suc_spec n' lval llock (Φ: () -> iProp Σ)
-  : (@is_lock _ _ _ γ llock (∃n, points_to γ lval (Value n) ∗ ● γ1 n))
-  -∗ (True -∗ Φ ())
-  -∗ ◯ γ1 n' 
+
+
+
+
+  Lemma withdraw_locked_suc_spec n' lval llock (Φ: bool -> iProp Σ)
+  : (@is_lock _ _ _ γ llock (∃n, points_to γ lval (Value n) ∗ ● γc n))
+  -∗ (True -∗ Φ  true)
+  -∗ ◯ γc n' 
   -∗ wp (state_interp γ) ⊤ (withdrawLocked n' llock lval) Φ.
   Proof.
     iIntros "#Hlock Hpost". unfold withdrawLocked.
@@ -251,6 +260,7 @@ Section bank_verification.
       iApply "Hpost".
   Qed.
 
+  Definition bank_inv l: iProp Σ := ∃ n, points_to γ l (Value n).
 
   Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) 
      (λ balanceOpt,
@@ -262,9 +272,12 @@ Section bank_verification.
     iApply wp_bind.
     iApply wp_alloc. iIntros (lval) "Hval".
     iApply wp_bind.
-    iApply (new_lock_spec with "Hval"). iIntros (llock) "#Hinv".
+    iApply (new_lock_spec _ (bank_inv lval ) with "[Hval]"). 
+    { by iExists 100. }
+     iIntros (llock) "#Hinv".
     iApply wp_fork.
-    - iNext. iApply wp_bind. iApply wp_a
-    -
+    - iNext. iApply wp_bind. iApply (withdraw_locked_spec with "Hinv").
+      iIntros "_".  iApply (withdraw_locked_spec with "Hinv"). done.
+    - 
   Qed.
 End bank_verification.

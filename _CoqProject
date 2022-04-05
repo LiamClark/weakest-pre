@@ -10,4 +10,5 @@ theories/program_logic/delaystate.v
 theories/program_logic/delaywp.v
 theories/program_logic/itree.v
 theories/program_logic/itreewp.v
+theories/program_logic/itree_examples.v
 
