@@ -174,11 +174,11 @@ Section bank.
 End bank.
 
 Class ccounterG Σ :=
-  CCounterG { ccounter_inG : inG Σ (frac_authR natR) }.
+  CCounterG { ccounter_inG : inG Σ (authR natUR) }.
 Local Existing Instance ccounter_inG.
 
 Definition ccounterΣ : gFunctors :=
-  #[GFunctor (frac_authR natR)].
+  #[GFunctor (authR natUR)].
 
 Global Instance subG_ccounterΣ {Σ} : subG ccounterΣ Σ → ccounterG Σ.
 Proof. solve_inG. Qed.
@@ -189,7 +189,7 @@ Section bank_verification.
   Context `{! inG Σ (heapR cell)}.
   Context `{! invGS Σ}.
   Context `{! ccounterG Σ }.
-  Context `{! inG Σ (viewR auth_view_rel)}.
+  (* Context `{! inG Σ (authR natUR)}. *)
   Context {γ: gname}.
   Context {γc: gname}.
 (* 
@@ -208,6 +208,13 @@ Section bank_verification.
   Check lt_not_le.
   Check le_not_lt.
   Search le Nat.leb. *)
+
+  Definition ccounter (γ: gname) (n: nat) :iProp Σ :=
+      own γ (◯ n).
+
+  Lemma ccounter_op n1 n2 :
+    ccounter γc (n1 + n2) ⊣⊢ ccounter γc n1 ∗ ccounter γc n2.
+  Proof. by rewrite /ccounter auth_frag_op -own_op. Qed.
 
   Definition ccounter_inv (l : loc) : iProp Σ :=
     ∃ n, own γc (● n) ∗ points_to γ l (Value n).
@@ -230,38 +237,55 @@ Section bank_verification.
   ◯ γ 60
   ◯ γ 40 *)
 
-  (* ● γ n ∗ ◯ γ m -∗ m <= n.
-  ● γ n ∗ ◯ γ m -∗ |==>  ● γ (n - m).
-  ◯ γ (n + m) ⊣⊢ (◯ γ n ∗ ◯ γ m).
+  (* ● γ n ∗ ◯ γ m -∗ m <= n.  done
+  ● γ n ∗ ◯ γ m -∗ |==>  ● γ (n - m). done.
+  ◯ γ (n + m) ⊣⊢ (◯ γ n ∗ ◯ γ m) doen in ccounter op.
   True -∗ |==> ∃ γ, ● γ n ∗ ◯ γ n *)
 
-
-
-
-
-  Lemma withdraw_locked_suc_spec n' lval llock (Φ: bool -> iProp Σ)
-  : (@is_lock _ _ _ γ llock (∃n, points_to γ lval (Value n) ∗ ● γc n))
-  -∗ (True -∗ Φ  true)
-  -∗ ◯ γc n' 
-  -∗ wp (state_interp γ) ⊤ (withdrawLocked n' llock lval) Φ.
+  Locate auth_both_valid_discrete.
+  Search (?n - ?m + ?m = ?n) .
+  Lemma auth_frag_lte (n m: nat): own γc (● n) -∗ own γc (◯ m) -∗ ⌜m <= n⌝.
   Proof.
-    iIntros "#Hlock Hpost". unfold withdrawLocked.
-    iApply wp_bind. iApply (aqcuire_spec with "Hlock").
-    iIntros "(%n & Hpt)". iApply wp_bind. 
-    destruct (Nat.le_gt_cases n' n).
-    - iApply (withdraw_spec_suc _ _ _ _ H  with "Hpt"). iIntros "Hpt".
-      iApply (release_spec with "Hlock [Hpt]").
-      { by iExists (n - n'). }
-      done.
-    - apply lt_not_le in H. 
-      iApply (withdraw_spec_fail _ _ _ _ H with "Hpt"). iIntros "Hpt".
-      iApply (release_spec' with "Hlock [Hpt]").
-      { by iExists n. }
-      iApply "Hpost".
+    iIntros "Hauth Hfrag".
+    (* What is this construct? *)
+    iDestruct (own_valid_2 with "Hauth Hfrag")
+    as %[?%nat_included]%auth_both_valid_discrete.
+    by iPureIntro.
   Qed.
 
-  Definition bank_inv l: iProp Σ := ∃ n, points_to γ l (Value n).
+  Lemma auth_frag_update (n m: nat): m <= n -> ● n ⋅ ◯ m ~~> ● (n - m) ⋅ ◯ 0.
+  Proof.
+    intros Hlte.
+    apply auth_update.
+    apply nat_local_update.
+    by rewrite (Nat.sub_add _ _ Hlte).
+  Qed.
 
+  Lemma auth_frag_own_update (n m: nat): own γc (● n) -∗ own γc (◯ m) ==∗ own γc (● (n - m)).
+  Proof.
+    iIntros "Hauth Hfrag".
+    iDestruct (auth_frag_lte with "Hauth Hfrag") as %Hlte.
+    iMod (own_update_2 with "Hauth Hfrag").
+    { by apply auth_frag_update. }
+    done.
+  Qed.
+
+  Lemma withdraw_locked_spec m lval llock (Φ: () -> iProp Σ)
+  : (@is_lock _ _ _ γ llock (ccounter_inv lval))
+  -∗ (True -∗ Φ ())
+  -∗ own γc (◯ m)
+  -∗ wp (state_interp γ) ⊤ (withdrawLocked m llock lval) Φ.
+  Proof.
+    iIntros "#Hlock Hpost Hfrag". unfold withdrawLocked.
+    iApply wp_bind. iApply (aqcuire_spec with "Hlock").
+    iIntros "(%n & Hauth & Hpt)". iDestruct (auth_frag_lte with "Hauth Hfrag") as %Hlt.
+    iApply wp_bind. iApply (withdraw_spec_suc _ _ _ _ Hlt with "Hpt"). iIntros "Hpt".
+    iApply bupd_wp. iMod (auth_frag_own_update with "Hauth Hfrag") as "Hauth". iModIntro.
+    iApply (release_spec with "Hlock [Hpt Hauth]"); try done.
+     unfold ccounter_inv. iExists (n - m). iFrame.
+  Qed.
+
+  (* The last thing remaining here is to allocate the ghost state, see the last undone lemma above *)
   Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) 
      (λ balanceOpt,
       match balanceOpt with
