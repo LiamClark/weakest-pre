@@ -191,7 +191,6 @@ Section bank_verification.
   Context `{! ccounterG Σ }.
   (* Context `{! inG Σ (authR natUR)}. *)
   Context {γ: gname}.
-  Context {γc: gname}.
 (* 
   Locate "<=?".
   Search le.
@@ -212,14 +211,14 @@ Section bank_verification.
   Definition ccounter (γ: gname) (n: nat) :iProp Σ :=
       own γ (◯ n).
 
-  Lemma ccounter_op n1 n2 :
+  Lemma ccounter_op (γc: gname) n1 n2 :
     ccounter γc (n1 + n2) ⊣⊢ ccounter γc n1 ∗ ccounter γc n2.
   Proof. by rewrite /ccounter auth_frag_op -own_op. Qed.
 
-  Definition ccounter_inv (l : loc) : iProp Σ :=
+  Definition ccounter_inv (γc: gname) (l : loc) : iProp Σ :=
     ∃ n, own γc (● n) ∗ points_to γ l (Value n).
 
-  Lemma withdraw_spec_suc n n' lval (Φ: bool -> iProp Σ)
+  Lemma withdraw_spec_suc (γc: gname) n n' lval (Φ: bool -> iProp Σ)
   : n' <= n ->
   points_to γ lval (Value n)
   -∗ (points_to γ lval (Value (n - n')) -∗ Φ true)
@@ -244,7 +243,7 @@ Section bank_verification.
 
   Locate auth_both_valid_discrete.
   Search (?n - ?m + ?m = ?n) .
-  Lemma auth_frag_lte (n m: nat): own γc (● n) -∗ own γc (◯ m) -∗ ⌜m <= n⌝.
+  Lemma auth_frag_lte (γc: gname) (n m: nat): own γc (● n) -∗ own γc (◯ m) -∗ ⌜m <= n⌝.
   Proof.
     iIntros "Hauth Hfrag".
     (* What is this construct? *)
@@ -261,7 +260,7 @@ Section bank_verification.
     by rewrite (Nat.sub_add _ _ Hlte).
   Qed.
 
-  Lemma auth_frag_own_update (n m: nat): own γc (● n) -∗ own γc (◯ m) ==∗ own γc (● (n - m)).
+  Lemma auth_frag_own_update (γc: gname) (n m: nat): own γc (● n) -∗ own γc (◯ m) ==∗ own γc (● (n - m)).
   Proof.
     iIntros "Hauth Hfrag".
     iDestruct (auth_frag_lte with "Hauth Hfrag") as %Hlte.
@@ -270,8 +269,8 @@ Section bank_verification.
     done.
   Qed.
 
-  Lemma withdraw_locked_spec m lval llock (Φ: () -> iProp Σ)
-  : (@is_lock _ _ _ γ llock (ccounter_inv lval))
+  Lemma withdraw_locked_spec (γc: gname) m lval llock (Φ: () -> iProp Σ)
+  : (@is_lock _ _ _ γ llock (ccounter_inv γc lval))
   -∗ (True -∗ Φ ())
   -∗ own γc (◯ m)
   -∗ wp (state_interp γ) ⊤ (withdrawLocked m llock lval) Φ.
@@ -279,7 +278,7 @@ Section bank_verification.
     iIntros "#Hlock Hpost Hfrag". unfold withdrawLocked.
     iApply wp_bind. iApply (aqcuire_spec with "Hlock").
     iIntros "(%n & Hauth & Hpt)". iDestruct (auth_frag_lte with "Hauth Hfrag") as %Hlt.
-    iApply wp_bind. iApply (withdraw_spec_suc _ _ _ _ Hlt with "Hpt"). iIntros "Hpt".
+    iApply wp_bind. iApply (withdraw_spec_suc γc _ _ _ _ Hlt with "Hpt"). iIntros "Hpt".
     iApply bupd_wp. iMod (auth_frag_own_update with "Hauth Hfrag") as "Hauth". iModIntro.
     iApply (release_spec with "Hlock [Hpt Hauth]"); try done.
      unfold ccounter_inv. iExists (n - m). iFrame.
@@ -293,12 +292,14 @@ Section bank_verification.
       | None => False
       end)%I.
   Proof.
+    iApply bupd_wp.
+    iMod (own_alloc (● 100)) as (γc) "Hauth". { by apply auth_auth_valid. } iModIntro.
     iApply wp_bind.
     iApply wp_alloc. iIntros (lval) "Hval".
     iApply wp_bind.
-    iApply (new_lock_spec _ (bank_inv lval ) with "[Hval]"). 
-    { by iExists 100. }
-     iIntros (llock) "#Hinv".
+    iApply (new_lock_spec _ (ccounter_inv γc lval ) with "[Hval Hauth]"). 
+    { iExists 100. iFrame. }
+    iIntros (llock) "#Hinv".
     iApply wp_fork.
     - iNext. iApply wp_bind. iApply (withdraw_locked_spec with "Hinv").
       iIntros "_".  iApply (withdraw_locked_spec with "Hinv"). done.
