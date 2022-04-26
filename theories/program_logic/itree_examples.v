@@ -163,14 +163,12 @@ Section bank.
   Definition bank_prog: expr cell (option nat) :=
     balanceLoc  ← alloc (Value 100) ; 
     lockLoc     ← new_lock ; 
-    Fork 
-      (withdrawLocked 5  lockLoc balanceLoc ;; withdrawLocked 25 lockLoc balanceLoc) 
-      ( withdrawLocked 20 lockLoc balanceLoc ;;
-        withdrawLocked 2  lockLoc balanceLoc ;;  
-        withdrawLocked 10 lockLoc balanceLoc ;; 
-        c ← get balanceLoc ;
-        getValue c)
-      .
+    fork (withdrawLocked 5  lockLoc balanceLoc ;; withdrawLocked 25 lockLoc balanceLoc) ;;
+    withdrawLocked 20 lockLoc balanceLoc ;;
+    withdrawLocked 2  lockLoc balanceLoc ;;  
+    withdrawLocked 10 lockLoc balanceLoc ;; 
+    c ← get balanceLoc ;
+    getValue c.
 End bank.
 
 Class ccounterG Σ :=
@@ -211,7 +209,7 @@ Section bank_verification.
   Definition ccounter (γ: gname) (n: nat) :iProp Σ :=
       own γ (◯ n).
 
-  Lemma ccounter_op (γc: gname) n1 n2 :
+  Lemma ccounter_split (γc: gname) n1 n2 :
     ccounter γc (n1 + n2) ⊣⊢ ccounter γc n1 ∗ ccounter γc n2.
   Proof. by rewrite /ccounter auth_frag_op -own_op. Qed.
 
@@ -271,11 +269,11 @@ Section bank_verification.
 
   Lemma withdraw_locked_spec (γc: gname) m lval llock (Φ: () -> iProp Σ)
   : (@is_lock _ _ _ γ llock (ccounter_inv γc lval))
-  -∗ (True -∗ Φ ())
   -∗ own γc (◯ m)
+  -∗ (True -∗ Φ ())
   -∗ wp (state_interp γ) ⊤ (withdrawLocked m llock lval) Φ.
   Proof.
-    iIntros "#Hlock Hpost Hfrag". unfold withdrawLocked.
+    iIntros "#Hlock Hfrag Hpost". unfold withdrawLocked.
     iApply wp_bind. iApply (aqcuire_spec with "Hlock").
     iIntros "(%n & Hauth & Hpt)". iDestruct (auth_frag_lte with "Hauth Hfrag") as %Hlt.
     iApply wp_bind. iApply (withdraw_spec_suc γc _ _ _ _ Hlt with "Hpt"). iIntros "Hpt".
@@ -283,6 +281,13 @@ Section bank_verification.
     iApply (release_spec with "Hlock [Hpt Hauth]"); try done.
      unfold ccounter_inv. iExists (n - m). iFrame.
   Qed.
+
+  Lemma split_100: 100 = 70 + 30. Proof. lia. Qed.
+  Lemma split_70: 70 = 38 + 32.   Proof. lia. Qed.
+  Lemma split_30: 30 = 25 + 5.    Proof. lia. Qed.
+  Lemma split_32: 32 = 12 + 20.   Proof. lia. Qed.
+  Lemma split_12: 12 = 10 + 2.    Proof. lia. Qed.
+
 
   (* The last thing remaining here is to allocate the ghost state, see the last undone lemma above *)
   Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) 
@@ -293,16 +298,30 @@ Section bank_verification.
       end)%I.
   Proof.
     iApply bupd_wp.
-    iMod (own_alloc (● 100)) as (γc) "Hauth". { by apply auth_auth_valid. } iModIntro.
+    iMod (own_alloc (● 100 ⋅ ◯ 100)) as (γc) "Hghost".
+    { apply auth_both_valid. done. } iModIntro.
+    iDestruct (own_op with "Hghost") as "(Hauth & Hfrag)".
+    iEval (rewrite split_100) in "Hfrag". iDestruct (ccounter_split with "Hfrag") as "(Hmain & Hfork)".
+    iEval (rewrite split_70) in "Hmain".  iDestruct (ccounter_split with "Hmain") as "(Hrest & Hmain)".
     iApply wp_bind.
     iApply wp_alloc. iIntros (lval) "Hval".
     iApply wp_bind.
     iApply (new_lock_spec _ (ccounter_inv γc lval ) with "[Hval Hauth]"). 
     { iExists 100. iFrame. }
     iIntros (llock) "#Hinv".
-    iApply wp_fork.
-    - iNext. iApply wp_bind. iApply (withdraw_locked_spec with "Hinv").
-      iIntros "_".  iApply (withdraw_locked_spec with "Hinv"). done.
-    - 
-  Qed.
+    iApply wp_bind. iApply (wp_fork with "[Hfork]").
+    - iNext. iApply wp_bind.
+      iEval (rewrite split_30) in "Hfork". iDestruct (ccounter_split with "Hfork") as "(Hfork & Hpay)".
+      iEval (unfold ccounter) in "Hpay".
+      iApply (withdraw_locked_spec with "Hinv Hpay").
+      iIntros "_".  iApply (withdraw_locked_spec with "Hinv Hfork"). done.
+    - iEval (rewrite split_32) in "Hmain". iDestruct (ccounter_split with "Hmain") as "(Hmain & Hpay)".
+      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv Hpay"). iIntros "_".
+      iEval (rewrite split_12) in "Hmain". iDestruct (ccounter_split with "Hmain") as "(Hmain & Hpay)".
+      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv Hpay"). iIntros "_".
+      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv Hmain"). iIntros "_".
+      (* Can I use Hrest here??  Perhaps something as the auth in Hinv needs to be atleast 38 because that's the fragment I still own *)
+      (* Sounds like a Robbert question for tomorrow! *)
+      admit.
+  Admitted.
 End bank_verification.
