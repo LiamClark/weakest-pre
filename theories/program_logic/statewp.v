@@ -101,6 +101,8 @@ Section state_wp.
     iApply wp_modifyS'. done.
   Qed.
 
+
+
   Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
@@ -128,6 +130,21 @@ Section state_wp_gp.
   Context `{! inG Σ (heapR A)}.
   Context (γ: gname).
 
+  (* Lemma wp_modifyS'' Φ f n v: 
+  σ !! n = v ->
+  (∀σ, state_interp γ σ ==∗ state_interp γ (f σ) ∗ Φ tt) -∗ 
+  state_wp (state_interp γ) (modifyS'' n f) Φ.
+  Proof.
+    iIntros "Hpost" (σ) "Hsi". unfold modifyS''.
+    iDestruct (si_get with "h")
+    iMod ("Hpost" with "Hsi") as "(Hsi & Hpost)".
+    iExists tt, (f σ).
+    iModIntro.
+    iSplit.
+    - iDestruct ()
+    -
+Qed.  *)
+
   Lemma wp_get n v (Ψ: A -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
   Proof.
@@ -139,13 +156,18 @@ Section state_wp_gp.
     iApply wp_ret. by iApply "Hpost".
   Qed.
 
+  Check is_Some.
+
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put n v') Ψ.
   Proof.
-    iIntros "Hpt Hpost".
-    iApply wp_modifyS.
+    iIntros "Hpt Hpost". unfold put. unfold modifyS''.
     iIntros (σ) "Hsi". 
-    iMod (si_put with "Hsi Hpt") as "($ & Hup)". 
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_put with "Hsi Hpt") as "(? & Hup)".
+    iModIntro. simpl. rewrite Hsome. simpl.
+    iExists tt, (<[n := v']> σ).
+    iFrame. iSplit; try done.
     by iApply "Hpost".
   Qed. 
 
@@ -163,23 +185,15 @@ Section state_wp_gp.
   Lemma wp_free v l (Ψ: unit -> iProp Σ):
     points_to γ l v -∗ Ψ tt -∗ state_wp (state_interp γ) (free l) Ψ.
   Proof.
-    iIntros "Hpt Hpost". iApply wp_modifyS.
+    iIntros "Hpt Hpost".
     iIntros (σ) "Hsi".
-    iMod (si_free with "Hsi Hpt") as "$".
-    done.
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_free with "Hsi Hpt") as "Hsi".
+    iModIntro. iExists tt, (delete l σ).
+    iFrame. iPureIntro. simpl. by rewrite Hsome. 
   Qed.
-
-
 End state_wp_gp.
 
-Set Printing Coercions.
-(*
-  alloc+ free.
-  adequacy.
-  Example programs.
-  abstract state.
-
- *)
 Section state_ad.
   Context `{! inG Σ (heapR V)}.
 
@@ -248,5 +262,3 @@ Section state_verification.
     iFrame.
     Qed.
 End state_verification.
-
-

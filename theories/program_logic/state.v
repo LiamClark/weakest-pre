@@ -49,11 +49,14 @@ End state_op.
 
 
 Section gmap_state.
+  Definition modifyS'' {A} (n: nat) (f: gmap nat A -> gmap nat A): state (gmap nat A) () :=
+    State $ λ st, if decide (is_Some (st !! n)) then Some (tt, f st) else None.
+
   Definition get {A} (n: nat): state (gmap nat A) A :=
     getS ≫= λ st, ret_fail $ lookup n st.
 
   Definition put {A} (n: nat) (x : A) : state (gmap nat A) unit :=
-    modifyS <[n := x]>.
+    modifyS'' n  <[n := x]>.
 
   Definition alloc {A} (v: A) : state (gmap nat A) nat :=
     modifyS'$ λ st, 
@@ -61,5 +64,6 @@ Section gmap_state.
                 in (fresh, <[fresh := v]> st). 
 
   Definition free {A} (n: nat): state (gmap nat A) unit :=
-    modifyS $ delete n.
+   modifyS'' n (delete n).
+
 End gmap_state.

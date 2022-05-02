@@ -216,19 +216,25 @@ Definition ret_fail {ST A} (m: option A): state_delay ST A :=
   |None => fail
   end.
 
+ Definition modifyS'' {A} (n: nat) (f: gmap nat A -> gmap nat A): state_delay (gmap nat A) () :=
+    State $ λ st, if decide (is_Some (st !! n)) then Answer $ Some (f st, tt) else  Answer $ None.
+
 Definition get {A} (n: nat): state_delay (gmap nat A) A :=
   getS ≫= λ st, ret_fail $ lookup n st.
 
-Definition put {A} (n: nat) (x : A) : state_delay (gmap nat A) unit :=
-  modifyS <[n := x]>.
+  Definition put {A} (n: nat) (x : A) : state_delay (gmap nat A) unit :=
+  modifyS'' n  <[n := x]>.
 
 Definition alloc {A} (v: A) : state_delay (gmap nat A) nat :=
   modifyS' $ λ st, 
               let fresh := fresh $ dom (gset nat) st
               in (<[fresh := v]> st, fresh). 
 
+(* Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
+  modifyS $ delete n. *)
+
 Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
-  modifyS $ delete n.
+  modifyS'' n (delete n).
 
 Fixpoint eval_delay {A} (n: nat) (ma: delay A): option A :=
   match n with
