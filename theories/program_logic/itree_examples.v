@@ -36,11 +36,6 @@ Definition acquire (l: loc): expr cell () :=
     (λ _, try_acquire l ≫= aqcuire_body)  
     tt.
 
-(* Definition acquire' (l: loc): expr cell () :=
-  itree.iter 
-    (λ _, try_aquire l ≫= (λ acq, if acq then mret $ inr $ () else mret $ inl $ ()))  
-    tt. *)
-
 Definition release (l: loc): expr cell () :=
   put l UnLocked.
 
@@ -146,7 +141,6 @@ Section bank.
     | Value n => mret $ Some $  n
     end.
 
-
   Definition withdraw (amount: nat) (balanceLoc: loc): expr cell bool :=
     balanceCell ← get balanceLoc;
     balance ← asValue balanceCell ; 
@@ -181,30 +175,11 @@ Definition ccounterΣ : gFunctors :=
 Global Instance subG_ccounterΣ {Σ} : subG ccounterΣ Σ → ccounterG Σ.
 Proof. solve_inG. Qed.
 
-
-
 Section bank_verification.
   Context `{! inG Σ (heapR cell)}.
   Context `{! invGS Σ}.
   Context `{! ccounterG Σ }.
-  (* Context `{! inG Σ (authR natUR)}. *)
   Context {γ: gname}.
-(* 
-  Locate "<=?".
-  Search le.
-  Search (?n <= ?m \/ _).
-  Check Nat.le_gt_cases.
-  Search (?n <= ?m -> ¬ _).
-  (*
-   I need to arrive at <=? = false
-  I did that using: Nat.leb: n <=? m = false <-> ¬ n <= m *)
-  Check Nat.leb_le.
-  (* I however have m < n from le_gt_cases.
-  Thus I need m < n -> ¬ (n <= m)  *) 
-  Search (?m < ?n -> ¬ (?n <= ?m)).
-  Check lt_not_le.
-  Check le_not_lt.
-  Search le Nat.leb. *)
 
   Definition ccounter (γ: gname) (n: nat) :iProp Σ :=
       own γ (◯ n).
@@ -230,21 +205,9 @@ Section bank_verification.
     iIntros "Hpt". iApply wp_return. by iApply "Hpost".
   Qed.
 
-  (* ● γ 100
-  ◯ γ 60
-  ◯ γ 40 *)
-
-  (* ● γ n ∗ ◯ γ m -∗ m <= n.  done
-  ● γ n ∗ ◯ γ m -∗ |==>  ● γ (n - m). done.
-  ◯ γ (n + m) ⊣⊢ (◯ γ n ∗ ◯ γ m) doen in ccounter op.
-  True -∗ |==> ∃ γ, ● γ n ∗ ◯ γ n *)
-
-  Locate auth_both_valid_discrete.
-  Search (?n - ?m + ?m = ?n) .
   Lemma auth_frag_lte (γc: gname) (n m: nat): own γc (● n) -∗ own γc (◯ m) -∗ ⌜m <= n⌝.
   Proof.
     iIntros "Hauth Hfrag".
-    (* What is this construct? *)
     iDestruct (own_valid_2 with "Hauth Hfrag")
     as %[?%nat_included]%auth_both_valid_discrete.
     by iPureIntro.
@@ -282,20 +245,12 @@ Section bank_verification.
      unfold ccounter_inv. iExists (n - m). iFrame.
   Qed.
 
-  Lemma split_100: 100 = 70 + 30. Proof. lia. Qed.
-  Lemma split_70: 70 = 38 + 32.   Proof. lia. Qed.
-  Lemma split_30: 30 = 25 + 5.    Proof. lia. Qed.
-  Lemma split_32: 32 = 12 + 20.   Proof. lia. Qed.
-  Lemma split_12: 12 = 10 + 2.    Proof. lia. Qed.
-
-
-  (* The last thing remaining here is to allocate the ghost state, see the last undone lemma above *)
   Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) 
-     (λ balanceOpt,
-      match balanceOpt with
-      | Some balance => ⌜balance = 38⌝
-      | None => False
-      end)%I.
+   (λ balanceOpt,
+    match balanceOpt with
+    | Some balance => ⌜balance = 38⌝
+    | None => False
+     end).
   Proof.
     iApply bupd_wp.
     iMod (own_alloc (● 100 ⋅ ◯ 100)) as (γc) "Hghost".
