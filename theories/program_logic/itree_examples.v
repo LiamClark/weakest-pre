@@ -25,7 +25,7 @@ Global Instance cell_inhabited: Inhabited (cell) := populate UnLocked.
 Definition new_lock: expr cell loc :=
   alloc UnLocked.
 
-Definition try_aquire (l: loc): expr cell bool :=
+Definition try_acquire (l: loc): expr cell bool :=
   snd <$> cmpXchg l UnLocked Locked.
 
 Definition aqcuire_body (acq: bool): expr cell (() + ()) :=
@@ -33,7 +33,7 @@ Definition aqcuire_body (acq: bool): expr cell (() + ()) :=
 
 Definition acquire (l: loc): expr cell () :=
   itree.iter 
-    (λ _, try_aquire l ≫= aqcuire_body)  
+    (λ _, try_acquire l ≫= aqcuire_body)  
     tt.
 
 (* Definition acquire' (l: loc): expr cell () :=
@@ -78,11 +78,11 @@ Section lock_verification.
   Qed.
 
   Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ):
-    is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) -∗ wp (state_interp γ) ⊤ (try_aquire lk) Φ.
+    is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) -∗ wp (state_interp γ) ⊤ (try_acquire lk) Φ.
   Proof.
     iIntros "#Hlock Hpost".
     unfold is_lock.
-    unfold try_aquire. iApply wp_fmap. 
+    unfold try_acquire. iApply wp_fmap. 
     iInv "Hlock" as "Hinv" "Hclose".
     unfold lock_inv.
     - apply vis_atomic.
