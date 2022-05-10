@@ -116,7 +116,7 @@ Definition lift_error {V A B} (x: error B): state V A B :=
         a ← x ;
         Here (a, h, ts).
 
-Definition modifyS' {V A B} (f: heap V -> B * heap V): state V A B :=
+Definition modifyS {V A B} (f: heap V -> B * heap V): state V A B :=
   State $ λ h ts, mret $ (f h, ts).
 
 Section state_op.
@@ -127,9 +127,6 @@ Section state_op.
   
    Definition put_heap (x: heap V): state V A unit :=
      State $ λ h t, mret (tt, x, t).
-
-   Definition modifyS (f: heap V -> heap V): state V A () :=
-     modifyS' $ λ h, (tt, f h).
 
    Definition fail: state V A B :=
      State $ λ h t, fail_prog.
@@ -155,22 +152,22 @@ End state_op.
 Section heap_op.
   Context {V A B: Type}.
 
-  Definition modifyS'' (n: nat) (f: heap V -> heap V): state V A () :=
+  Definition modifyS' (n: nat) (f: heap V -> heap V): state V A () :=
     State $ λ h ts, if decide (is_Some (h !! n)) then Here (tt, f h, ts) else ProgErr.
 
   Definition get (n: nat): state V A V :=
     get_heap ≫= λ h, lift_error $ into_prog $ lookup n h.
 
   Definition put (n: nat) (x : V) : state V A unit :=
-    modifyS'' n  <[n := x]>.
+    modifyS' n  <[n := x]>.
 
   Definition alloc (v: V) : state V A nat :=
-    modifyS' $ λ st, 
+    modifyS $ λ st, 
                 let l := fresh_loc st
                 in (l, <[l:= v]> st).
 
   Definition free (n: nat): state V A unit :=
-   modifyS'' n (delete n).
+   modifyS' n (delete n).
 
   Definition cmpXchg {cmp: EqDecision V} (l: nat) (v1 v2: V): state V A (V * bool) :=
     get l ≫= λ vl, if decide (vl = v1) then put l v2 ;; mret (vl, true) else mret (vl, false).
@@ -239,7 +236,8 @@ Definition check_main {V R} (ts: list (thread V R)): option R :=
 (* get main expr from pool 
    fix order indexing by modulo.
 *)
-Definition single_step_thread {V R} {cmp: EqDecision V} (s: scheduler V R): state V R (scheduler V R ) :=
+Definition single_step_thread {V R} {cmp: EqDecision V} (s: scheduler V R)
+  : state V R (scheduler V R ) :=
       ts ← get_threads ;  
       h  ← get_heap ; 
       let '(nt, s')    := (schedule s) (ts, h) in

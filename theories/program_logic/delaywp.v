@@ -272,19 +272,13 @@ Proof.
   by iApply wp_delay_return.
 Qed.
 
-Lemma wp_modifyS' {A} Φ (f: ST -> ST * A): 
-  (∀σ, SI σ ==∗ let '(σ', x) := f σ in SI σ' ∗ Φ x) -∗ wp SI (modifyS' f) Φ.
+Lemma wp_modifyS {A} Φ (f: ST -> ST * A): 
+  (∀σ, SI σ ==∗ let '(σ', x) := f σ in SI σ' ∗ Φ x) -∗ wp SI (modifyS f) Φ.
 Proof.
   iIntros "Hpost" (σ) "Hsi".
   iMod ("Hpost" with "Hsi") as "Hpost /=".
   destruct (f σ) as [x s'].
   by iApply wp_delay_return.
-Qed.
-
-Lemma wp_modifyS Φ f: (∀σ, SI σ ==∗ SI (f σ) ∗ Φ tt) -∗ wp SI (modifyS f) Φ.
-Proof.
-  iIntros "Hpost". 
-  iApply wp_modifyS'. done.
 Qed.
 
 Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ wp SI (putS σ') Φ.
@@ -324,7 +318,7 @@ Section delay_wp_heap.
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
     (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) (alloc v) Ψ.
   Proof.
-    iIntros "Hpost". iApply wp_modifyS'.
+    iIntros "Hpost". iApply wp_modifyS.
     iIntros (σ) "Hsi".
     iMod (si_alloc with "Hsi") as "($ & Hpt)".
     iApply ("Hpost" with "Hpt").

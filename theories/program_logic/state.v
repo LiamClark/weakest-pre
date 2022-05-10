@@ -22,7 +22,7 @@ Instance mbind_state ST: MBind (state ST) :=
                           end.
 
 
-Definition modifyS' {A ST} (f: ST -> A * ST): state ST A :=
+Definition modifyS {A ST} (f: ST -> A * ST): state ST A :=
   State $ λ st, Some $ f st.
 
 Section state_op.
@@ -33,9 +33,6 @@ Section state_op.
   
    Definition putS (x: ST): state ST () :=
      State $ λ st, Some (tt, x).
-
-   Definition modifyS (f: ST -> ST): state ST () :=
-     modifyS' $ λ st, (tt, f st).
 
    Definition fail: state ST A :=
      State $ λ st, None.
@@ -49,21 +46,21 @@ End state_op.
 
 
 Section gmap_state.
-  Definition modifyS'' {A} (n: nat) (f: gmap nat A -> gmap nat A): state (gmap nat A) () :=
+  Definition modifyS' {A} (n: nat) 
+    (f: gmap nat A -> gmap nat A): state (gmap nat A) () :=
     State $ λ st, if decide (is_Some (st !! n)) then Some (tt, f st) else None.
 
   Definition get {A} (n: nat): state (gmap nat A) A :=
     getS ≫= λ st, ret_fail $ lookup n st.
 
   Definition put {A} (n: nat) (x : A) : state (gmap nat A) unit :=
-    modifyS'' n  <[n := x]>.
+    modifyS' n  <[n := x]>.
 
   Definition alloc {A} (v: A) : state (gmap nat A) nat :=
-    modifyS'$ λ st, 
+    modifyS $ λ st, 
                 let fresh := fresh $ dom (gset nat) st
                 in (fresh, <[fresh := v]> st). 
 
   Definition free {A} (n: nat): state (gmap nat A) unit :=
-   modifyS'' n (delete n).
-
+   modifyS' n (delete n).
 End gmap_state.

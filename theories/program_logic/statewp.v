@@ -82,8 +82,8 @@ Section state_wp.
     - iFrame. 
   Qed.
 
-  Lemma wp_modifyS' {A} Φ (f: ST -> A * ST): 
-    (∀σ, SI σ ==∗ let '(x, σ') := f σ in SI σ' ∗ Φ x) -∗ state_wp SI (modifyS' f) Φ.
+  Lemma wp_modifyS {A} Φ (f: ST -> A * ST): 
+    (∀σ, SI σ ==∗ let '(x, σ') := f σ in SI σ' ∗ Φ x) -∗ state_wp SI (modifyS f) Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
     iMod ("Hpost" with "Hsi") as "Hpost".
@@ -91,17 +91,9 @@ Section state_wp.
     iExists x, s'.
     iModIntro.
     iSplit.
-    - unfold modifyS'. simpl. rewrite E. done.
+    - unfold modifyS. simpl. rewrite E. done.
     - iFrame.
   Qed.
-
-  Lemma wp_modifyS Φ f: (∀σ, SI σ ==∗ SI (f σ) ∗ Φ tt) -∗ state_wp SI (modifyS f) Φ.
-  Proof.
-    iIntros "Hpost". 
-    iApply wp_modifyS'. done.
-  Qed.
-
-
 
   Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
   Proof.
@@ -130,21 +122,6 @@ Section state_wp_gp.
   Context `{! inG Σ (heapR A)}.
   Context (γ: gname).
 
-  (* Lemma wp_modifyS'' Φ f n v: 
-  σ !! n = v ->
-  (∀σ, state_interp γ σ ==∗ state_interp γ (f σ) ∗ Φ tt) -∗ 
-  state_wp (state_interp γ) (modifyS'' n f) Φ.
-  Proof.
-    iIntros "Hpost" (σ) "Hsi". unfold modifyS''.
-    iDestruct (si_get with "h")
-    iMod ("Hpost" with "Hsi") as "(Hsi & Hpost)".
-    iExists tt, (f σ).
-    iModIntro.
-    iSplit.
-    - iDestruct ()
-    -
-Qed.  *)
-
   Lemma wp_get n v (Ψ: A -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v -∗ Ψ v) -∗ state_wp (state_interp γ) (get n) Ψ.
   Proof.
@@ -161,7 +138,7 @@ Qed.  *)
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put n v') Ψ.
   Proof.
-    iIntros "Hpt Hpost". unfold put. unfold modifyS''.
+    iIntros "Hpt Hpost". unfold put. unfold modifyS'.
     iIntros (σ) "Hsi". 
     iDestruct (si_get with "Hsi Hpt") as %Hsome.
     iMod (si_put with "Hsi Hpt") as "(? & Hup)".
@@ -174,7 +151,7 @@ Qed.  *)
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
     (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc v) Ψ.
   Proof.
-    iIntros "Hpost". iApply wp_modifyS'.
+    iIntros "Hpost". iApply wp_modifyS.
     iIntros (σ) "Hsi".
     iMod (si_alloc with "Hsi") as "(Hsi' & Hpt)".
     iModIntro.
