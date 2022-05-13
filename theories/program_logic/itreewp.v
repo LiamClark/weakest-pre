@@ -24,41 +24,6 @@ refine (
 ).
 Defined.
 
-(*
- Now I want to change these update modalities to fancy update modalities
- How do I want to do that? let's peak at the Iris wp definition.
-
- I want to import
- From iris.base_logic.lib Require Export fancy_updates oh that's already imported.
- The definition of wp_pre requires an extra argument E for a mask.
- The wand however can have two masks and iris uses empty there a lot.
- 
- 1. Research the meanings of the two masks?
- 2. Why is it a coPset?
- 3. where is the notation defined.
-*)
-
-(* Locate "|={ _ }=> _". *)
-(* Locate "|={ _ , _ }=> _". *)
-(* Check fupd. *)
-(* 
-  A fupd with one mask simply keeps the same mask.
-  A fupd with two masks goes from mask one to mask two.
-*)
-(* 
-  now I can take the mask after the type variable udner a -d> arrow. works.
-  The step for answer should never include any fupds so there we can use the same mask on both sides.
-  However, what do I do for Think, Fork and Vis.
-  So the coPset is a set of names, I can think tomorrow about how to use those.
-
-  So the definition for Wp with fupds in Iris from the ground up drops and re-enables
-  all masks to allow the reduction reasoning to not bother about the invariants.
-  It also gives the forked-off thread the "full" mask because it won't reduce in
-  this step anyways.
-  Let me try proving a fancy update rule to see what I need.
-*)
-
-(* Search FUpd. *)
 Definition wp_pre {V} (SI: gmap loc V -> iProp Σ)
      (go: discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ)):
      discrete_funO (λ R, coPset -d> expr V R -d> (R -d> iPropO Σ) -d> iPropO Σ).
@@ -117,25 +82,6 @@ Proof.
   by rewrite wp_unfold.
 Qed.
 
-(* Locate "|={ _ }[ _ ]▷=>". *)
-(* Locate "|={ _ }[ _ ]▷=> _". *)
-(* on newer versions of Iris *)
-(* Check fupd_mask_intro.  *)
-
-(* Check fupd_intro_mask. *)
-(* Check fupd_mask_weaken. *)
-
-(* (IH * P) ⊢ wp e Φ*)
-(* ▷ (IH * P) ⊢ ▷ wp e Φ*)
-(* ▷ IH * ▷ P ⊢ ▷ wp e Φ *)
-(* ▷ IH * P ⊢ ▷ wp e Φ *)
-(* ▷ IH * P ⊢ wp (Think e) Φ *)
-
-(* loop x = loop x
-
-iter (_. inl ()) *)
-
-(* ||={E1} P -∗ |={E1,E2}=> P *)
 Lemma wp_think {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
    (e: expr V R) (Φ: R -> iProp Σ): ▷ wp SI E e Φ -∗ wp SI E (Think e) Φ.
 Proof.
@@ -174,8 +120,6 @@ Proof.
     iApply "IH". done.
 Qed.
 
-
-(* Print uPred_fupd. *)
 Lemma wp_vup {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
   (e: expr V R) (Φ: R -> iProp Σ)
   : (|={E}=> wp SI E e (λ v, |={E}=> Φ v)) ⊢ wp SI E e Φ.
@@ -235,7 +179,6 @@ Proof.
     done.
 Qed.
 
-(* Check fupd_mask_mono. *)
 Lemma wp_strong_mono_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E1 E2: coPset)
   (e: expr V R) (Φ Ψ: R -> iProp Σ)
   : E1 ⊆ E2 -> wp SI E1 e Φ -∗ (∀ v, Φ v ={E2}=∗ Ψ v) -∗ wp SI E2 e Ψ.
@@ -367,7 +310,6 @@ Proof.
   - by iMod "Hwp" as "Hwp".
 Qed.
 
-
 Lemma wp_fupd {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
  (e: expr V R) (Φ : R -> iProp Σ) 
  : wp SI E e (λ v, |={E}=> Φ v) ⊢ wp SI E e Φ.
@@ -414,17 +356,7 @@ Lemma wp_frame_l {V R: Type} (SI: gmap nat V -> iProp Σ) (E: coPset)
     auto with iFrame.
   Qed.
 
-  (* Lemma wp_fork {V R: Type} (SI: gmap nat V -> iProp Σ) (e1: expr V ()) (e2: expr V R) (E: coPset) (Φ: R -> iProp Σ):
-   ▷ wp SI  ⊤ e1 (λ _, True) -∗ wp SI E e2 Φ -∗  wp SI E (Fork e1 e2) Φ.
-  Proof.
-    iIntros "Hwpf HwpΦ".
-    iEval( rewrite wp_unfold). unfold wp_pre.
-    iApply fupd_mask_intro; first set_solver.
-    iIntros "Hclose !>". iMod "Hclose". iModIntro.
-    iFrame.
-  Qed. *)
-
-  Lemma wp_fork {V R: Type} (SI: gmap nat V -> iProp Σ) (e: expr V ()) (E: coPset) (Φ: () -> iProp Σ):
+  Lemma wp_fork {V: Type} (SI: gmap nat V -> iProp Σ) (e: expr V ()) (E: coPset) (Φ: () -> iProp Σ):
    ▷ wp SI ⊤ e (λ _, True) -∗ Φ () -∗ wp SI E (itree.fork e) Φ.
   Proof.
     iIntros "Hwpf HΦ".
