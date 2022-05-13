@@ -272,19 +272,13 @@ Proof.
   by iApply wp_delay_return.
 Qed.
 
-Lemma wp_modifyS' {A} Φ (f: ST -> ST * A): 
-  (∀σ, SI σ ==∗ let '(σ', x) := f σ in SI σ' ∗ Φ x) -∗ wp SI (modifyS' f) Φ.
+Lemma wp_modifyS {A} Φ (f: ST -> ST * A): 
+  (∀σ, SI σ ==∗ let '(σ', x) := f σ in SI σ' ∗ Φ x) -∗ wp SI (modifyS f) Φ.
 Proof.
   iIntros "Hpost" (σ) "Hsi".
   iMod ("Hpost" with "Hsi") as "Hpost /=".
   destruct (f σ) as [x s'].
   by iApply wp_delay_return.
-Qed.
-
-Lemma wp_modifyS Φ f: (∀σ, SI σ ==∗ SI (f σ) ∗ Φ tt) -∗ wp SI (modifyS f) Φ.
-Proof.
-  iIntros "Hpost". 
-  iApply wp_modifyS'. done.
 Qed.
 
 Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ wp SI (putS σ') Φ.
@@ -314,16 +308,17 @@ Section delay_wp_heap.
     points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ wp (state_interp γ) (put n v') Ψ.
   Proof.
     iIntros "Hpt Hpost".
-    iApply wp_modifyS.
     iIntros (σ) "Hsi". 
-    iMod (si_put with "Hsi Hpt") as "($ & Hup)". 
-    by iApply "Hpost".
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_put with "Hsi Hpt") as "(? & Hup)".
+    iModIntro. simpl. rewrite Hsome. simpl. iApply wp_delay_return.
+    iFrame. by iApply "Hpost".
   Qed. 
 
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
     (∀l, points_to γ l v -∗ Ψ l) -∗ wp (state_interp γ) (alloc v) Ψ.
   Proof.
-    iIntros "Hpost". iApply wp_modifyS'.
+    iIntros "Hpost". iApply wp_modifyS.
     iIntros (σ) "Hsi".
     iMod (si_alloc with "Hsi") as "($ & Hpt)".
     iApply ("Hpost" with "Hpt").
@@ -332,10 +327,12 @@ Section delay_wp_heap.
   Lemma wp_free v l (Ψ: unit -> iProp Σ):
     points_to γ l v -∗ Ψ tt -∗ wp (state_interp γ) (free l) Ψ.
   Proof.
-    iIntros "Hpt Hpost". iApply wp_modifyS.
+    iIntros "Hpt Hpost".
     iIntros (σ) "Hsi".
-    iMod (si_free with "Hsi Hpt") as "$".
-    done.
+    iDestruct (si_get with "Hsi Hpt") as %Hsome.
+    iMod (si_free with "Hsi Hpt") as "? /=".
+    iModIntro. rewrite Hsome. simpl. iApply wp_delay_return.
+    iFrame.
   Qed.
 End delay_wp_heap.
 

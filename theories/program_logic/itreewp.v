@@ -679,13 +679,15 @@ Section adequacy.
       + simpl. destruct H as (Hlookup & Heq). rewrite Hlookup. subst h. simpl.
         iExists []. rewrite right_id_L.
         iFrame. auto.
-      + simpl. destruct H as (Hlookup & Heq). subst σ'. destruct v.
+      + simpl. destruct H as ((v' & Hsome) & Heq). subst σ'. destruct v.
+        rewrite Hsome. simpl.
         iExists []. rewrite right_id_L.
         iFrame. auto.
       + simpl. destruct H as (Hlookup & Heq). subst σ' v.
         iExists []. rewrite right_id_L.
         iFrame. auto.
-      + simpl. destruct H as (Hlookup & Heq). subst σ'. destruct v.
+      + simpl. destruct H as ((v' & Hsome) & Heq). subst σ'. destruct v.
+        rewrite Hsome. simpl.
         iExists []. rewrite right_id_L.
         iFrame. auto.
       + destruct v as [vret [|]]; simpl in H.
@@ -694,6 +696,7 @@ Section adequacy.
         simpl.
         rewrite HLookup. simpl.
         rewrite decide_True //. simpl.
+        rewrite HLookup.
         iExists []. rewrite right_id_L.
         iFrame. auto.
         * destruct H as (x & HLookup & -> & -> & Hneq).
@@ -908,7 +911,8 @@ End adequacy.
      let's lift that.
      Now I need to get it in a big op
 *)
-Lemma adequacy {V Σ} {cmp: EqDecision V} `{!inG Σ (heapR V)} `{!invGpreS Σ} {R} (φ: R -> Prop) (n: nat)
+Lemma adequacy {V Σ} {cmp: EqDecision V} `{!inG Σ (heapR V)} `{!invGpreS Σ} {R}
+  (φ: R -> Prop) (n: nat)
   (SI: gmap nat V -> iProp Σ)
   (s: scheduler V R)
   (e: expr V R)
