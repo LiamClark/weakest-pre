@@ -16,34 +16,29 @@ Instance mret_state ST: MRet (state ST) := λ A a, State $ λ s, Some (a, s).
 
 Instance mbind_state ST: MBind (state ST) :=
   λ _ _ f ma, State $
-                    λ st, match (runState ma) st with
+                    λ st, match runState ma st with
                           | Some (x, st') => runState (f x) st'
                           | None => None
                           end.
 
 
-Definition modifyS {A ST} (f: ST -> A * ST): state ST A :=
+Definition modifyS {ST A} (f: ST -> A * ST): state ST A :=
   State $ λ st, Some $ f st.
 
-Section state_op.
-   Context {ST A: Type}.
+Definition getS {ST} : state ST ST :=
+  State $ λ st, Some (st, st).
 
-   Definition getS: state ST ST :=
-     State $ λ st, Some (st, st).
-  
-   Definition putS (x: ST): state ST () :=
-     State $ λ st, Some (tt, x).
+Definition putS {ST} (x: ST): state ST () :=
+  State $ λ st, Some (tt, x).
 
-   Definition fail: state ST A :=
-     State $ λ st, None.
+Definition fail {ST A}: state ST A :=
+  State $ λ st, None.
 
-    Definition ret_fail (m: option A): state ST A := 
-     match m with
-     | Some x => mret x
-     | None => fail
-     end.
-End state_op.
-
+Definition ret_fail {ST A} (m: option A): state ST A := 
+  match m with
+  | Some x => mret x
+  | None => fail
+  end.
 
 Section gmap_state.
   Definition modifyS' {A} (n: nat) 
