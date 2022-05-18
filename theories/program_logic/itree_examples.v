@@ -147,7 +147,7 @@ Section bank.
 
   Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
     acquire lockLoc ;; 
-    ( b ) ← withdraw amount balanceLoc ;
+    b ← withdraw amount balanceLoc ;
     if b : bool then release lockLoc else itree.fail.
 
   Definition bank_prog: expr cell () :=
@@ -250,7 +250,6 @@ Section bank_verification.
     { iExists 100. iFrame. }
     iIntros (llock) "#Hinv".
     iApply wp_bind. iApply (wp_fork with "[H5 H25]").
-    Unshelve. 3: { exact nat. }
     - 
      iNext. iApply wp_bind.
       iApply (withdraw_locked_spec with "Hinv H5").
