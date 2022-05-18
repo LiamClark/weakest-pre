@@ -28,12 +28,9 @@ Definition new_lock: expr cell loc :=
 Definition try_acquire (l: loc): expr cell bool :=
   snd <$> cmpXchg l UnLocked Locked.
 
-Definition aqcuire_body (acq: bool): expr cell (() + ()) :=
-  if acq then mret $ inr $ () else mret $ inl $ ().
-
 Definition acquire (l: loc): expr cell () :=
   itree.iter 
-    (λ _, try_acquire l ≫= aqcuire_body)  
+    (λ _, try_acquire l ≫= λ b, if b : bool then mret $ inr $ () else mret $ inl $ ())  
     tt.
 
 Definition release (l: loc): expr cell () :=
@@ -149,10 +146,9 @@ Section bank.
     else mret false.
 
   Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
-    let ret: bool -> expr cell () :=  λ (b: bool), if b then release lockLoc else itree.fail in
     acquire lockLoc ;; 
     ( b ) ← withdraw amount balanceLoc ;
-    ret b.
+    if b : bool then release lockLoc else itree.fail.
 
   Definition bank_prog: expr cell () :=
     balanceLoc  ← alloc (Value 100) ; 
@@ -254,6 +250,7 @@ Section bank_verification.
     { iExists 100. iFrame. }
     iIntros (llock) "#Hinv".
     iApply wp_bind. iApply (wp_fork with "[H5 H25]").
+    Unshelve. 3: { exact nat. }
     - 
      iNext. iApply wp_bind.
       iApply (withdraw_locked_spec with "Hinv H5").
