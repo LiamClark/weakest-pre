@@ -106,5 +106,4 @@ Section heap.
     - iApply own_op.
       iFrame.
   Qed.
-
 End heap.

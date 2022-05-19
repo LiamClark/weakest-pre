@@ -5,7 +5,6 @@ From iris.base_logic.lib Require Export fancy_updates.
 From shiris.program_logic Require Import state heapmodel.
 Set Default Proof Using "Type".
 
-
 Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
            (e: state ST A) (Φ: A -> iProp Σ): iProp Σ := ∀ σ,
   SI σ ==∗

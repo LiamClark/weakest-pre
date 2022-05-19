@@ -5,7 +5,6 @@ Record state (ST A: Type): Type :=
        runState: ST -> option (A * ST)
     }.
 
-
 Arguments State {_ _} _.
 Arguments runState {_ _} _.
 
