@@ -157,6 +157,33 @@ Proof.
       by iApply "IH".
 Qed.
 
+Lemma adequacy_delay' {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
+    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
+    match eval_delay n prog with
+    | Some x => φ x
+    | None => True
+    end.
+Proof.
+  intros Hpre.
+  apply (@later_bupdN_soundness (iResUR Σ) n).
+  revert Hpre.
+  apply lift_entails.
+  iIntros "Hpre".
+  destruct (eval_delay n prog) as [x' | ] eqn: E .
+  - iInduction n as [|n'] "IH" forall (prog E).
+    + done.
+    + simpl in *.
+      rewrite wp_delay_unfold.
+      unfold wp_delay_pre.
+      destruct prog as [a| prog']. simplify_eq/=.
+        * iMod "Hpre" as %Hpre.
+          iModIntro. iNext.
+          by iApply nlaters.
+        * iMod "Hpre". iModIntro. iNext.
+          by iApply "IH".
+  - by iApply nlaters. 
+  Qed.
+
 Lemma wp_strong_mono {Σ A ST SI} (e: state_delay ST A) (Φ Ψ : A -> iProp Σ):
   wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ .
 Proof.
