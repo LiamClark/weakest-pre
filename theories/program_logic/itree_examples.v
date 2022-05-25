@@ -145,7 +145,7 @@ Section bank.
     then put balanceLoc (Value (balance - amount)) ;; mret true 
     else mret false.
 
-  Definition withdrawLocked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
+  Definition withdraw_locked (amount: nat) (lockLoc: loc) (balanceLoc: loc): expr cell () :=
     acquire lockLoc ;; 
     b ← withdraw amount balanceLoc ;
     if b : bool then release lockLoc else itree.fail.
@@ -153,10 +153,10 @@ Section bank.
   Definition bank_prog: expr cell () :=
     balanceLoc  ← alloc (Value 100) ; 
     lockLoc     ← new_lock ; 
-    fork (withdrawLocked 5 lockLoc balanceLoc ;; withdrawLocked 25 lockLoc balanceLoc) ;;
-    withdrawLocked 20 lockLoc balanceLoc ;;
-    withdrawLocked 2  lockLoc balanceLoc ;;
-    withdrawLocked 10 lockLoc balanceLoc ;;
+    fork (withdraw_locked 5 lockLoc balanceLoc ;; withdraw_locked 25 lockLoc balanceLoc) ;;
+    withdraw_locked 20 lockLoc balanceLoc ;;
+    withdraw_locked 2  lockLoc balanceLoc ;;
+    withdraw_locked 10 lockLoc balanceLoc ;;
     mret tt.
 End bank.
 
@@ -183,14 +183,14 @@ Section bank_verification.
     ccounter γc (n1 + n2) ⊣⊢ ccounter γc n1 ∗ ccounter γc n2.
   Proof. by rewrite /ccounter auth_frag_op -own_op. Qed.
 
-  Definition ccounter_inv (γc: gname) (l : loc) : iProp Σ :=
+  Definition lock_payload (γc: gname) (l : loc) : iProp Σ :=
     ∃ n, own γc (● n) ∗ points_to γ l (Value n).
 
-  Lemma withdraw_spec_suc (γc: gname) n n' lval (Φ: bool -> iProp Σ)
-  : n' <= n ->
+  Lemma withdraw_spec_suc (γc: gname) n m lval (Φ: bool -> iProp Σ)
+  : m <= n ->
   points_to γ lval (Value n) -∗
-  (points_to γ lval (Value (n - n')) -∗ Φ true) -∗
-  wp (state_interp γ) ⊤ (withdraw n' lval) Φ.
+  (points_to γ lval (Value (n - m)) -∗ Φ true) -∗
+  wp (state_interp γ) ⊤ (withdraw m lval) Φ.
   Proof.
     iIntros (Hle) "Hpt Hpost". 
     iApply wp_bind. iApply (wp_get with "Hpt"). iIntros "Hpt".
@@ -224,18 +224,18 @@ Section bank_verification.
     done.
   Qed.
 
-  Lemma withdraw_locked_spec (γc: gname) m lval llock (Φ: () -> iProp Σ)
-  : (@is_lock _ _ _ γ llock (ccounter_inv γc lval))-∗ own γc (◯ m)
+  Lemma withdraw_locked_spec (γc: gname) m lbal llock (Φ: () -> iProp Σ)
+  : (@is_lock _ _ _ γ llock (lock_payload γc lbal))-∗ own γc (◯ m)
   -∗ (True -∗ Φ ())
-  -∗ wp (state_interp γ) ⊤ (withdrawLocked m llock lval) Φ.
+  -∗ wp (state_interp γ) ⊤ (withdraw_locked m llock lbal) Φ.
   Proof.
-    iIntros "#Hlock Hfrag Hpost". unfold withdrawLocked.
+    iIntros "#Hlock Hfrag Hpost". unfold withdraw_locked.
     iApply wp_bind. iApply (aqcuire_spec with "Hlock").
     iIntros "(%n & Hauth & Hpt)". iDestruct (auth_frag_lte with "Hauth Hfrag") as %Hlt.
     iApply wp_bind. iApply (withdraw_spec_suc γc _ _ _ _ Hlt with "Hpt"). iIntros "Hpt".
     iApply bupd_wp. iMod (auth_frag_own_update with "Hauth Hfrag") as "Hauth". iModIntro.
     iApply (release_spec with "Hlock [Hpt Hauth]"); try done.
-     unfold ccounter_inv. iExists (n - m). iFrame.
+    unfold lock_payload. iExists (n - m). iFrame.
   Qed.
 
   Lemma bank_spec : ⊢ wp (state_interp γ) ⊤ (bank_prog) (λ x, ⌜x = tt⌝). 
@@ -246,7 +246,7 @@ Section bank_verification.
     iApply wp_bind.
     iApply wp_alloc. iIntros (lval) "Hval".
     iApply wp_bind.
-    iApply (new_lock_spec _ (ccounter_inv γc lval ) with "[Hval Hauth]"). 
+    iApply (new_lock_spec _ (lock_payload γc lval ) with "[Hval Hauth]"). 
     { iExists 100. iFrame. }
     iIntros (llock) "#Hinv".
     iApply wp_bind. iApply (wp_fork with "[H5 H25]").
