@@ -124,23 +124,16 @@ End lock_verification.
 
 Section bank.
 
-  Definition asValue (c: cell): expr cell nat :=
+  Definition as_value (c: cell): expr cell nat :=
     match c with
     | Locked => itree.fail
     | UnLocked => itree.fail 
     | Value n => mret n
     end.
 
-  Definition getValue (c: cell) : expr cell (option nat) :=
-    match c with
-    | Locked => mret $ None 
-    | UnLocked => mret $ None 
-    | Value n => mret $ Some $  n
-    end.
-
   Definition withdraw (amount: nat) (balanceLoc: loc): expr cell bool :=
     balanceCell ← get balanceLoc;
-    balance ← asValue balanceCell ; 
+    balance ← as_value balanceCell ; 
     if (amount <=? balance) 
     then put balanceLoc (Value (balance - amount)) ;; mret true 
     else mret false.
