@@ -30,7 +30,7 @@ Definition try_acquire (l: loc): expr cell bool :=
 
 Definition acquire (l: loc): expr cell () :=
   itree.iter 
-    (λ _, try_acquire l ≫= λ b, if b : bool then mret $ inr $ () else mret $ inl $ ())  
+    (λ _, try_acquire l ≫= λ (b : bool), if b then mret $ inr $ () else mret $ inl $ ())
     tt.
 
 Definition release (l: loc): expr cell () :=
@@ -132,7 +132,7 @@ Section bank.
     end.
 
   Definition withdraw (amount: nat) (balanceLoc: loc): expr cell bool :=
-    balanceCell ← get balanceLoc;
+    balanceCell ← get balanceLoc ;
     balance ← as_value balanceCell ; 
     if (amount <=? balance) 
     then put balanceLoc (Value (balance - amount)) ;; mret true 
