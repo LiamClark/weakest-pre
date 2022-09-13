@@ -21,9 +21,6 @@ Instance mbind_state ST: MBind (state ST) :=
                           end.
 
 
-Definition modifyS {ST A} (f: ST -> A * ST): state ST A :=
-  State $ λ st, Some $ f st.
-
 Definition getS {ST} : state ST ST :=
   State $ λ st, Some (st, st).
 
@@ -50,10 +47,10 @@ Section gmap_state.
   Definition put {A} (n: nat) (x : A) : state (gmap nat A) unit :=
     modifyS' n  <[n := x]>.
 
-  Definition alloc {A} (v: A) : state (gmap nat A) nat :=
-    modifyS $ λ st, 
-                let fresh := fresh $ dom (gset nat) st
-                in (fresh, <[fresh := v]> st). 
+  Definition alloc {A} (v: A) : state (gmap nat A) nat.
+  refine (State $ λ st, let freshn := fresh $ dom (gset nat) st
+                       in Some (freshn, <[freshn := v]> st)).
+  Defined.
 
   Definition free {A} (n: nat): state (gmap nat A) unit :=
    modifyS' n (delete n).

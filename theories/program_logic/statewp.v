@@ -81,7 +81,7 @@ Section state_wp.
     - iFrame. 
   Qed.
 
-  Lemma wp_modifyS {A} Φ (f: ST -> A * ST): 
+  (* Lemma wp_modifyS {A} Φ (f: ST -> A * ST): 
     (∀σ, SI σ ==∗ let '(x, σ') := f σ in SI σ' ∗ Φ x) -∗ state_wp SI (modifyS f) Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
@@ -92,7 +92,7 @@ Section state_wp.
     iSplit.
     - unfold modifyS. simpl. rewrite E. done.
     - iFrame.
-  Qed.
+  Qed. *)
 
   Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
   Proof.
@@ -150,11 +150,15 @@ Section state_wp_gp.
   Lemma wp_alloc v (Ψ: nat -> iProp Σ):
     (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc v) Ψ.
   Proof.
-    iIntros "Hpost". iApply wp_modifyS.
+    iIntros "Hpost". unfold alloc. iSimpl.
+     (* iApply wp_modifyS. *)
     iIntros (σ) "Hsi".
+    iExists (fresh $ dom (gset nat) σ), ( <[ (fresh $ dom (gset nat) σ):= v]> σ). simpl.
     iMod (si_alloc with "Hsi") as "(Hsi' & Hpt)".
     iModIntro.
     iFrame.
+    iSplit.
+    { iPureIntro. reflexivity. }
     iApply ("Hpost" with "Hpt").
   Qed.
 
