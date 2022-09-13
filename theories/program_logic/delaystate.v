@@ -195,9 +195,6 @@ refine (λ a, iter_state_delay
 Defined.
 
 (*Next up implement the state operations! *)
-Definition modifyS {A ST} (f: ST -> ST * A): state_delay ST A :=
-  State $ λ s, Answer $ Some $ f s.
-
 Definition getS {ST}: state_delay ST ST :=
   State $ λ st, Answer $ Some $ (st, st).
 
@@ -219,17 +216,20 @@ Definition ret_fail {ST A} (m: option A): state_delay ST A :=
 Definition get {A} (n: nat): state_delay (gmap nat A) A :=
   getS ≫= λ st, ret_fail $ lookup n st.
 
-  Definition put {A} (n: nat) (x : A) : state_delay (gmap nat A) unit :=
+Definition put {A} (n: nat) (x : A) : state_delay (gmap nat A) unit :=
   modifyS' n  <[n := x]>.
 
-Definition alloc {A} (v: A) : state_delay (gmap nat A) nat :=
-  modifyS $ λ st, 
-              let fresh := fresh $ dom (gset nat) st
-              in (<[fresh := v]> st, fresh). 
 
-(* Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
-  modifyS $ delete n. *)
+Definition fresh_adress {A} (σ: gmap nat A): nat := fresh $ dom (gset nat) σ.
 
+Definition alloc {A} (v: A) : state_delay (gmap nat A) nat.
+refine (
+  State $ λ st,  let freshn := fresh $ dom (gset nat) st
+                 in  Answer $ Some (<[freshn := v]> st, freshn)
+).
+Defined.
+
+              
 Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
   modifyS' n (delete n).
 

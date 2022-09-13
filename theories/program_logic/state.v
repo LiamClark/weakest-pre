@@ -47,10 +47,11 @@ Section gmap_state.
   Definition put {A} (n: nat) (x : A) : state (gmap nat A) unit :=
     modifyS' n  <[n := x]>.
 
-  Definition alloc {A} (v: A) : state (gmap nat A) nat.
-  refine (State $ λ st, let freshn := fresh $ dom (gset nat) st
-                       in Some (freshn, <[freshn := v]> st)).
-  Defined.
+  Definition fresh_adress {A} (σ: gmap nat A): nat := fresh $ dom (gset nat) σ.
+
+  Definition alloc {A} (v: A) : state (gmap nat A) nat :=
+    State $ λ st, let freshn := fresh_adress st
+                  in Some (freshn, <[freshn := v]> st).
 
   Definition free {A} (n: nat): state (gmap nat A) unit :=
    modifyS' n (delete n).

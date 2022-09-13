@@ -18,6 +18,7 @@ Section heap.
 
   Definition lift_excl (σ: gmap nat A): gmap nat (excl (leibnizO A)) := Excl <$> σ.
   Definition state_interp (σ: gmap nat A) := own γ (● (lift_excl σ)).
+  
 
   Lemma fresh_none (σ: gmap nat A): 
     let l := fresh (dom (gset nat) σ)
@@ -90,7 +91,6 @@ Section heap.
        + done. 
     - unfold lift_excl. done.
   Qed.
-
 
   Lemma si_free σ v l:
    state_interp σ -∗ points_to l v ==∗ state_interp (delete l σ).
