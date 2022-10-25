@@ -1,6 +1,0 @@
-Hi Robbert,
-
-1. Wat is het juiste woord om aan de rechterkant van een vdash te refereren P |- Q  wat is Q? consequent?
-2. Ik heb de wp regels voor Cas toegevoegd. Daar kwam ik de heap definitie die ik tot nu toe heb gebruikt opnieuw tegen namelijk:
-   `Context `{! inG Σ (heapR natO)}.` Oftewel hij is nu nog hard coded voor natural numbers.
-    Volgens mij heb ik voor spinlocks ook niet meer nodig dan natural numbers. Denk jij dat dit nog moet worden aangepast of laten we dit zo?
