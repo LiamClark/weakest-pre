@@ -90,6 +90,16 @@ Definition loop {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
          )
          (inr a).
 
+CoFixpoint loop''' {A B C} (f: C + A -> delay (C + B)): C + A -> delay B :=
+  λ ca, f ca ≫= λ cb, 
+  match cb with
+  | inl c => Think $ (loop'''  f (inl c))
+  | inr b => Answer b
+  end.
+
+Definition loop'' {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
+  λ a, loop''' f (inr a).
+
 (*Now we define our computations in terms of StateT ST (OptionT Delay) *)
 Record state_delay (ST A: Type) : Type := State {
   runState: ST -> delay $ option (ST * A)
