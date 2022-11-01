@@ -119,6 +119,40 @@ Proof.
   - by iApply wp_delay_return.
 Qed.
 
+(* Direct wp rules for loop rather than using those for iter*)
+Lemma wp_delay_loop''' {Σ A B C} (Φ: B -> iProp Σ)
+  (x: C + A)
+  (f: C + A -> delay (C + B)):
+  wp_delay (f x) (λ cb, 
+                    match cb with
+                    | inl c  => ▷ wp_delay (loop''' f (inl c)) Φ
+                    | inr b  =>  Φ b
+                    end
+  ) -∗
+  wp_delay (loop''' f x) Φ.
+Proof.
+  iIntros "Hwp".
+  rewrite loop'''_unfold.
+  iApply wp_delay_bind.
+  iApply (wp_strong_mono_delay with "Hwp").
+  iIntros ([a | b]) "H !> /=".
+  - by iApply wp_delay_think.
+  - by iApply wp_delay_return.
+Qed.
+
+Lemma wp_delay_loop'' {Σ A B C} (Φ: B -> iProp Σ)
+  (x: A)
+  (f: C + A -> delay (C + B)):
+  wp_delay (f (inr x)) (λ cb, 
+                    match cb with
+                    | inl c  => ▷ wp_delay (loop''' f (inl c)) Φ
+                    | inr b  =>  Φ b
+                    end
+  ) -∗
+  wp_delay (loop'' f x) Φ.
+Proof.
+  by iApply wp_delay_loop'''.
+Qed.
 
 Lemma bupd_wp_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : (|==> wp_delay e Φ) ⊢ wp_delay e Φ.
 Proof.
@@ -266,7 +300,7 @@ Qed.
 Section state_wp.
   Context {Σ} {ST} (SI: ST -> iProp Σ).
 
- Lemma wp_iter {A B} (Φ: B -> iProp Σ)
+Lemma wp_iter {A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> state_delay ST (A + B)):
   wp SI (f x) (case_ (λ x, ▷ wp SI (iter_state_delay f x) Φ) Φ) -∗
@@ -288,7 +322,7 @@ Proof.
   iMod ("Hwp'" with "Hsi") as "Hwp' /= ".
   iModIntro.
   done.
-Qed. 
+Qed.
 
 Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ wp SI (getS) Φ.
 Proof.

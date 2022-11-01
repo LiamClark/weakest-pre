@@ -75,6 +75,8 @@ Proof.
   done.
 Qed.
 
+
+
 (*
   Iter and loop are mutually derivable so here we implement loop in terms of iter
   the intuition is as follows: I don't actually get it yet let's just run it and see what it does.
@@ -90,15 +92,28 @@ Definition loop {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
          )
          (inr a).
 
+(* These are the rules if we choose not to define loop in terms of iter *)
 CoFixpoint loop''' {A B C} (f: C + A -> delay (C + B)): C + A -> delay B :=
   λ ca, f ca ≫= λ cb, 
   match cb with
-  | inl c => Think $ (loop'''  f (inl c))
+  | inl c => Think (loop''' f (inl c))
   | inr b => Answer b
   end.
 
 Definition loop'' {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
   λ a, loop''' f (inr a).
+
+Lemma loop'''_unfold {A B C} (f: C + A -> delay (C + B)) (x: C + A):
+   loop''' f x = f x ≫= (λ cb, match cb with
+                               | inl c => Think (loop''' f (inl c))
+                               | inr b => Answer b
+                               end
+                        ).
+Proof.
+  rewrite <- (delay_frob_eq (loop''' f x)).
+  rewrite <- (delay_frob_eq (_ ≫= _)).
+  done.
+Qed.
 
 (*Now we define our computations in terms of StateT ST (OptionT Delay) *)
 Record state_delay (ST A: Type) : Type := State {
