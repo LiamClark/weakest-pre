@@ -14,7 +14,8 @@ Instance fmap_state ST: FMap (state ST) :=
 Instance mret_state ST: MRet (state ST) := λ A a, State $ λ s, Some (a, s).
 
 Instance mbind_state ST: MBind (state ST) :=
-  λ _ _ f ma, State $
+  λ (A: Type) (B: Type) (f: A -> state ST B)
+    (ma: state ST A), State $
                     λ st, match runState ma st with
                           | Some (x, st') => runState (f x) st'
                           | None => None

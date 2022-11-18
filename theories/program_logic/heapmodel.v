@@ -9,10 +9,8 @@ Definition heapR (A: Type): cmra := authR (gmapUR nat (exclR (leibnizO A))).
 Section heap.
   Context `{! inG Σ (heapR A)}.
   Context (γ: gname).
- (* Now come the rule that needs the points to connective in their weakest pre definition.
-     We therefore first define this in terms of the Authorative camera.
-   *)
 
+  (* Definition of our points to connective in terms of the authoratative camera *)
   Definition points_to (n: nat) (v: A): iProp Σ :=
     own γ ( ◯ {[ n := Excl v ]}).
 
@@ -100,8 +98,6 @@ Section heap.
     iApply (own_update).
     - apply auth_update_dealloc.
       unfold lift_excl. rewrite fmap_delete.
-      (* why does this fail type class resolution? *)
-      (* apply delete_singleton_local_update with (x := Excl v). *)
       apply (delete_singleton_local_update _ l (Excl (v: leibnizO A))).
     - iApply own_op.
       iFrame.

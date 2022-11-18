@@ -1,10 +1,9 @@
 From iris.proofmode Require Import base tactics classes.
 From iris.base_logic.lib Require Export fancy_updates.
-From shiris.program_logic Require Import delaystate.
-From shiris.program_logic Require Import delaywp.
+From shiris.program_logic Require Import heapmodel delaystate delaywp.
 
-(*Example programs *)
-(* 
+(*Example programs
+
   fib' is our loop body.
   st is the state that we use between iterations of our computation.
   it's components are: (n, x, y) where
@@ -28,29 +27,18 @@ Proof.
   reflexivity.
 Qed.
 
-(* 
-    What is the intuition behind this?
-*)
 Fixpoint coq_fib (a b: nat) (n: nat): nat :=
-    match n with
-    |O => a 
-    |S n' => match n' with
-             | O => b 
-             | S n'' => (coq_fib a b n') + (coq_fib a b n'')
-             end
-    end.
-
-(* CoFixpoint fib''' (n: nat): delay nat := *)
-  (* match n with *)
-  (* | 0 => Answer 1 *)
-  (* | 1 => Answer 1 *)
-  (* | _ => n1 ← fib''' (pred n) ; *)
-         (* n2 ← fib''' (pred (pred n)) ; *)
-         (* Answer (n1 + n2) *)
-  (* end. *)
+  match n with
+  |O => a 
+  |S n' => match n' with
+           | O => b 
+           | S n'' => (coq_fib a b n') + (coq_fib a b n'')
+           end
+  end.
 
 Lemma test_coq_fib:
   (coq_fib 0 1) <$>[0; 1; 2; 3; 4; 5; 6; 7] = [0; 1; 1; 2; 3; 5; 8; 13].
+Proof.
   reflexivity.
 Qed.
 
@@ -62,9 +50,8 @@ Qed.
 Section delay_verif.
   Context `{! inG Σ (heapR natO)}.
   
-  Definition post' (x y n: nat) (ret: nat): iProp Σ.
-  refine( ⌜ret = coq_fib x y n⌝%I).
-  Defined.
+  Definition post' (x y n: nat) (ret: nat): iProp Σ :=
+    ⌜ret = coq_fib x y n⌝%I.
   
   Definition post (n ret: nat): iProp Σ := post' 0 1 n ret.
   
@@ -90,7 +77,6 @@ Section delay_verif.
       - by destruct H.
   Qed.
   
-  
   Lemma coq_fib_move n1 n2 n:
    coq_fib n2 (n1 + n2) n = coq_fib n1 n2 (S n).
   Proof.
@@ -104,16 +90,15 @@ Section delay_verif.
         reflexivity.
   Qed.
   
-  (* To get lob induction to work I need the numbers that are passed
-      between loop states to vary. but then my post condition does
-      not always hold that needs to be generalized too.
+  (* To get lob induction to work we need the numbers that are passed
+      between loop states to vary. This means the post condition needs the same generalisation.
   *)
   Lemma verify_delay_fib' x y n:
       ⊢ wp_delay (delaystate.iter fib' (n, x, y)) (post' x y n).
   Proof.
       iLöb as "IH" forall (n x y).
       iApply wp_delay_iter. destruct n as [| n'] eqn: E.
-      - unfold fib'. iApply wp_delay_return.  simpl. unfold post'.  simpl. done.
+      - unfold fib'. iApply wp_delay_return. simpl. unfold post'.  simpl. done.
       - iApply wp_delay_return. simpl. 
         iNext.
         iApply (wp_strong_mono_delay with "IH").
@@ -121,31 +106,27 @@ Section delay_verif.
         apply coq_fib_move.
   Qed.
   
-  
-  Check curry3.
   Lemma verify_delay_hoare_fib' x y n:
       ⊢ hoare_delay True (delaystate.iter fib' (n, x, y)) (post' x y n).
   Proof.
-      iLöb as "IH" forall (n x y).
-      iApply (hoare_delay_iter _ 
-        (λ '(n',x',y'), hoare_delay True (delaystate.iter fib' (n', x', y')) (post' x y n))
-        ).
-       destruct n as [| n'] eqn: E.
-      (* iApply (hoare_delay_iter _ _). destruct n as [| n'] eqn: E. *)
-      - simpl.  iApply hoare_delay_mret'. iIntros "!> _".
+    iLöb as "IH" forall (n x y).
+    iApply (hoare_delay_iter _ 
+      (λ '(n',x',y'), hoare_delay True (delaystate.iter fib' (n', x', y')) (post' x y n))
+    ).
+     destruct n as [| n'] eqn: E.
+    - simpl.  iApply hoare_delay_mret'. iIntros "!> _".
+      done.
+    - simpl. iApply hoare_delay_mret'. iIntros "!> _". simpl.
+      iNext.
+      iApply (hoare_delay_consequence True _); try done.
+      iIntros "!>" (res H). iPureIntro. subst res. apply coq_fib_move.
+    - iIntros ([[n' y'] x']).
+      iApply (hoare_delay_consequence_l (True ∗ _)).
+      + iIntros "!> H". iSplit. done. iApply "H".
+      + iApply (hoare_delay_ctx' True _).
+        iIntros "!> !> Hhd".
         done.
-      - simpl. iApply hoare_delay_mret'. iIntros "!> _". simpl.
-        iNext.
-        iApply (hoare_delay_consequence True _); try done.
-        iIntros "!>" (res H). iPureIntro. subst res. apply coq_fib_move.
-      - iIntros ([[n' y'] x']).
-        iApply (hoare_delay_consequence_l (True ∗ _)).
-        + iIntros "!> H". iSplit. done. iApply "H".
-        + iApply (hoare_delay_ctx' True _).
-          iIntros "!> !> Hhd".
-          done.
   Qed.
-
   
   Lemma verify_delay_fib n:
       ⊢ wp_delay (fib n) (post n).
@@ -155,12 +136,12 @@ Section delay_verif.
   Qed.
   
   Definition fib_state' (l1 l2: nat) (n: nat): state_delay (gmap nat nat) (nat + nat) :=
-      match n with
-      | S n' => n1 ← get l1 ;
-                n2 ← get l2 ;
-                put l1 n2 ;; put l2 (n1 + n2) ;; mret $ inl n'
-      | O => inr <$> get l1
-      end.
+    match n with
+    | S n' => n1 ← get l1 ;
+              n2 ← get l2 ;
+              put l1 n2 ;; put l2 (n1 + n2) ;; mret $ inl n'
+    | O => inr <$> get l1
+    end.
   
   Lemma verify_delay_state_fib' l1 l2 n1 n2 n:
       ∀ γ, points_to γ l1 n1 ∗ points_to γ l2 n2 -∗
@@ -218,30 +199,4 @@ Section loop_verif.
     simpl.
     iApply "IH". 
   Qed.
-
 End loop_verif.
-(* 
-Plinis dentist trick
-s: nat -> nat
-nul: nat
-iter:A -> (A -> A) -> nat -> A
-pred (n: nat): nat :=
-3
-1 -> 1, 0
-2 -> 2, 1
-3 -> 3, 2
-snd $ iter (0, 0) (λ '(x, y), (S x, x) )
-
-
-
-  Lob induction: (▷ (Q1 ^ Q2) -> Q1 ^ Q2) ⊢ Q1 ^ Q2 
-  ( ▷(▷ P ^ P) -> (▷ P ^ P)) ⊢ (▷ P ^ P) 
-
-  P ⊢ ( ▷(▷ P ^ P) -> (▷ P ^ P))
-
-  - P ^ ▷ ▷ P ^ ▷ P
-    ▷ P ^ P
-
-  Goal:
-   P ⊢ ▷ P
-*)

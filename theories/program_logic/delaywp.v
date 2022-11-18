@@ -18,11 +18,12 @@ Set Default Proof Using "Type".
 
 Definition wp_delay_pre {Σ} {A} (go: delay A -d> (A -d> iPropO Σ) -d> iPropO Σ):
       delay A -d> (A -d> iPropO Σ) -d> iPropO Σ.
-refine(λ e Φ, |==> match e with
-                   | Answer x => Φ x
-                   | Think e' => ▷ go e' Φ
-                   end
-              )%I.
+refine(
+  λ e Φ, |==> match e with
+              | Answer x => Φ x
+              | Think e' => ▷ go e' Φ
+              end
+      )%I.
 Defined.
 
 Instance wp_delay_pre_contractive {Σ A}: Contractive (@wp_delay_pre Σ A ).
@@ -31,7 +32,7 @@ Proof.
   repeat (f_contractive || f_equiv); apply Hwp.
 Qed.
  
-Definition wp_delay {Σ} {A}: delay A -> (A -> iProp Σ)-> iProp Σ := fixpoint wp_delay_pre.
+Definition wp_delay {Σ} {A}: delay A -> (A -> iProp Σ) -> iProp Σ := fixpoint wp_delay_pre.
 
 Definition wp {Σ} {ST A} (SI: ST -> iProp Σ) (e: state_delay ST A) (Φ: A -> iProp Σ): iProp Σ.
 refine(∀ σ, 
@@ -120,19 +121,19 @@ Proof.
 Qed.
 
 (* Direct wp rules for loop rather than using those for iter*)
-Lemma wp_delay_loop''' {Σ A B C} (Φ: B -> iProp Σ)
+Lemma wp_delay_loop_rec {Σ A B C} (Φ: B -> iProp Σ)
   (x: C + A)
   (f: C + A -> delay (C + B)):
   wp_delay (f x) (λ cb, 
                     match cb with
-                    | inl c  => ▷ wp_delay (loop''' f (inl c)) Φ
+                    | inl c  => ▷ wp_delay (loop_rec f (inl c)) Φ
                     | inr b  =>  Φ b
                     end
   ) -∗
-  wp_delay (loop''' f x) Φ.
+  wp_delay (loop_rec f x) Φ.
 Proof.
   iIntros "Hwp".
-  rewrite loop'''_unfold.
+  rewrite loop_rec_unfold.
   iApply wp_delay_bind.
   iApply (wp_strong_mono_delay with "Hwp").
   iIntros ([a | b]) "H !> /=".
@@ -140,18 +141,18 @@ Proof.
   - by iApply wp_delay_return.
 Qed.
 
-Lemma wp_delay_loop'' {Σ A B C} (Φ: B -> iProp Σ)
+Lemma wp_delay_loop' {Σ A B C} (Φ: B -> iProp Σ)
   (x: A)
   (f: C + A -> delay (C + B)):
   wp_delay (f (inr x)) (λ cb, 
                     match cb with
-                    | inl c  => ▷ wp_delay (loop''' f (inl c)) Φ
+                    | inl c  => ▷ wp_delay (loop_rec f (inl c)) Φ
                     | inr b  =>  Φ b
                     end
   ) -∗
-  wp_delay (loop'' f x) Φ.
+  wp_delay (loop' f x) Φ.
 Proof.
-  by iApply wp_delay_loop'''.
+  by iApply wp_delay_loop_rec.
 Qed.
 
 Lemma bupd_wp_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : (|==> wp_delay e Φ) ⊢ wp_delay e Φ.

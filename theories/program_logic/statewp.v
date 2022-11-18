@@ -13,15 +13,8 @@ Definition state_wp {Σ} {ST A} (SI: ST -> iProp Σ)
           Φ a.
 
 Section state_wp.
-  Context  {Σ} {ST} (SI: ST -> iProp Σ).
+  Context {Σ} {ST} (SI: ST -> iProp Σ).
   Implicit Types P Q R: iProp Σ.
-
-  (*
-    Definable: wp_ret, wp_bind, wp_get, wp_put. Derived rules from heaplang wps.
-    Define: fail as operation
-
-    For multiheap look at: base-logic/lib/genheap.v
-   *)
 
   Global Instance wp_ne {A} (e: state ST A) n :
     Proper (pointwise_relation _ (dist n) ==> dist n) (state_wp SI e).
@@ -70,7 +63,6 @@ Section state_wp.
     eauto with iFrame.
   Qed.
 
-  (* The way the post condition gets implied here seems, dodgy? *)
   Lemma wp_getS Φ : (∀σ, SI σ ==∗ SI σ ∗ Φ σ) -∗ state_wp SI (getS) Φ.
   Proof.
     iIntros "Hpost" (σ) "Hsi".
@@ -80,19 +72,6 @@ Section state_wp.
     - iPureIntro. done.
     - iFrame. 
   Qed.
-
-  (* Lemma wp_modifyS {A} Φ (f: ST -> A * ST): 
-    (∀σ, SI σ ==∗ let '(x, σ') := f σ in SI σ' ∗ Φ x) -∗ state_wp SI (modifyS f) Φ.
-  Proof.
-    iIntros "Hpost" (σ) "Hsi".
-    iMod ("Hpost" with "Hsi") as "Hpost".
-    destruct (f σ) as [x s'] eqn: E.
-    iExists x, s'.
-    iModIntro.
-    iSplit.
-    - unfold modifyS. simpl. rewrite E. done.
-    - iFrame.
-  Qed. *)
 
   Lemma wp_putS Φ σ' : (∀σ, SI σ ==∗ SI σ' ∗ Φ tt) -∗ state_wp SI (putS σ') Φ.
   Proof.
@@ -104,7 +83,6 @@ Section state_wp.
     - iFrame.
   Qed.
 
-  (*Derived rules *)
   Lemma wp_mono {A} Φ Ψ (e: state ST A): (∀ v, Φ v ⊢ Ψ v) → state_wp SI e Φ ⊢ state_wp SI e Ψ.
   Proof.
      iIntros (HΦ) "H"; iApply (wp_strong_mono with "H"); auto.
@@ -132,8 +110,6 @@ Section state_wp_gp.
     iApply wp_ret. by iApply "Hpost".
   Qed.
 
-  Check is_Some.
-
   Lemma wp_put n v v' (Ψ: unit -> iProp Σ) :
     points_to γ n v -∗ (points_to γ n v' -∗ Ψ tt) -∗ state_wp (state_interp γ) (put n v') Ψ.
   Proof.
@@ -151,7 +127,6 @@ Section state_wp_gp.
     (∀l, points_to γ l v -∗ Ψ l) -∗ state_wp (state_interp γ) (alloc v) Ψ.
   Proof.
     iIntros "Hpost". unfold alloc. iSimpl.
-     (* iApply wp_modifyS. *)
     iIntros (σ) "Hsi".
     iExists (fresh $ dom (gset nat) σ), ( <[ (fresh $ dom (gset nat) σ):= v]> σ). simpl.
     iMod (si_alloc with "Hsi") as "(Hsi' & Hpt)".
@@ -203,9 +178,6 @@ Section state_verification.
       get k ≫= λ y,  
         put l y ;; put k x.
 
-  (*for linked lists 
-    https://gitlab.mpi-sws.org/iris/stdpp/-/blob/master/theories/countable.v#L21
-  *)
   Lemma swap_verif l k x y :
    ∀γ Φ, points_to γ l x ∗ points_to γ k y -∗ 
        (points_to γ l y ∗ points_to γ k x -∗ Φ tt) -∗

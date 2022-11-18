@@ -8,7 +8,6 @@ Import derived_laws_later.bi.
 
 Set Default Proof Using "Type".
 
-
 Lemma step_bupd_bupd {M} φ:
   ((|==> ▷ φ) ⊢@{uPredI M} |==> ▷ |==> φ).
 Proof.
@@ -91,9 +90,6 @@ Proof.
   - iModIntro. iNext. iModIntro. done.
 Qed.
 
-(* 
-  This was convenient but let's cover this with Robbert
-*)
 Lemma fupd_nlaters {Σ} `{!invGS Σ} (n: nat) (E1 E2: coPset) (Q: iProp Σ):
   E2 ⊆ E1 ->
   Q ⊢ Nat.iter n (λ P : iPropI Σ, |={E1, E2}=> ▷ |={E2, E1}=> P) Q.

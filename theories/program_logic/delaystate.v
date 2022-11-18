@@ -1,7 +1,7 @@
 From stdpp Require Import list option base gmap fin_sets fin_map_dom.
 Require Import Unicode.Utf8.
 
-(*First we define the delay monad and it's looping combinators *)
+(*  Definition of the delay monad and its looping combinators *)
 CoInductive delay (A: Type): Type :=
 | Answer: A -> delay A
 | Think: delay A -> delay A.
@@ -31,18 +31,16 @@ Instance fmap_delay: (FMap delay) :=
 
 
 (* Coproduct lifting operations
- g >>> f /  f . g  *)
+    g >>> f /  f . g  
+ *)
 Definition delay_pipe {A B C}  (f: A -> delay B) (g: B -> delay C): A -> delay C := 
   λ x,  f x ≫= g.
 
-Definition case_ {A B C}  (f: A -> C) (g: B -> C)
-  : (A + B -> C).
-refine(λ ab,  match ab with
-              | inl a => f a
-              | inr b => g b
-              end 
-).
-Defined.
+Definition case_ {A B C}  (f: A -> C) (g: B -> C): (A + B -> C) :=
+  λ ab, match ab with
+        | inl a => f a
+        | inr b => g b
+        end.
 
 CoFixpoint iter' {A B} (f: A -> delay (A + B)) : A -> delay B :=
  λ x, ab ← f x ;
@@ -51,16 +49,14 @@ CoFixpoint iter' {A B} (f: A -> delay (A + B)) : A -> delay B :=
         | inr b => Answer b
         end.
 
-CoFixpoint iter {A B} (f: A -> delay (A + B)) : A -> delay B.
-refine (delay_pipe f ( case_ (Think ∘ iter _ _ f) Answer)).
-Defined.
+CoFixpoint iter {A B} (f: A -> delay (A + B)) : A -> delay B :=
+  delay_pipe f (case_ (Think ∘ iter f) Answer).
 
-Definition delay_frob {A} (e: delay A): delay A.
-refine ( match e with
-          |Answer x => Answer x
-          |Think e' => Think e'
-end).
-Defined.
+Definition delay_frob {A} (e: delay A): delay A :=
+  match e with
+  |Answer x => Answer x
+  |Think e' => Think e'
+  end.
 
 Lemma delay_frob_eq {A} (e: delay A): delay_frob e = e.
 Proof.
@@ -75,12 +71,6 @@ Proof.
   done.
 Qed.
 
-
-
-(*
-  Iter and loop are mutually derivable so here we implement loop in terms of iter
-  the intuition is as follows: I don't actually get it yet let's just run it and see what it does.
-*)
 Definition loop {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
   λ a,
     iter (λ ca: C + A,
@@ -92,37 +82,38 @@ Definition loop {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
          )
          (inr a).
 
-(* These are the rules if we choose not to define loop in terms of iter *)
-CoFixpoint loop''' {A B C} (f: C + A -> delay (C + B)): C + A -> delay B :=
+(* Loop can also be directly implemented, not in terms of iter *)
+CoFixpoint loop_rec {A B C} (f: C + A -> delay (C + B)): C + A -> delay B :=
   λ ca, f ca ≫= λ cb, 
-  match cb with
-  | inl c => Think (loop''' f (inl c))
-  | inr b => Answer b
-  end.
+     match cb with
+     | inl c => Think (loop_rec f (inl c))
+     | inr b => Answer b
+     end.
 
-Definition loop'' {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
-  λ a, loop''' f (inr a).
+Definition loop' {A B C} (f: C + A -> delay (C + B)): A -> delay B :=
+  λ a, loop_rec f (inr a).
 
-Lemma loop'''_unfold {A B C} (f: C + A -> delay (C + B)) (x: C + A):
-   loop''' f x = f x ≫= (λ cb, match cb with
-                               | inl c => Think (loop''' f (inl c))
+Lemma loop_rec_unfold {A B C} (f: C + A -> delay (C + B)) (x: C + A):
+   loop_rec f x = f x ≫= (λ cb, match cb with
+                               | inl c => Think (loop_rec f (inl c))
                                | inr b => Answer b
                                end
                         ).
 Proof.
-  rewrite <- (delay_frob_eq (loop''' f x)).
+  rewrite <- (delay_frob_eq (loop_rec f x)).
   rewrite <- (delay_frob_eq (_ ≫= _)).
   done.
 Qed.
 
-(*Now we define our computations in terms of StateT ST (OptionT Delay) *)
+(* We can add state to delay compuations by means of the state monad transformer:
+   StateT ST (OptionT Delay)
+*)
 Record state_delay (ST A: Type) : Type := State {
   runState: ST -> delay $ option (ST * A)
 }.
 
 Arguments State {_ _}.
 Arguments runState {_ _}.
-
 
 Instance mret_state_delay ST : MRet (state_delay ST) :=
    λ A a, State $ λ s, Answer $ Some (s, a).
@@ -143,52 +134,37 @@ Instance mbind_state_delay ST: MBind (state_delay ST) :=
     ).
 
 Definition distribute_delay_state {A B ST} (m: delay $ option (ST * (A + B))):
- delay (option (ST * A) + option (ST * B)).
-refine ((λ x, match x with
-              | Some (s, ab) => match ab with (* is there a bifunctor instance?*)
-                                | inl a => inl $ Some (s, a)
-                                | inr b => inr $ Some (s, b)
+  delay (option (ST * A) + option (ST * B)) :=
+    (λ x, match x with
+                  | Some (s, ab) => match ab with 
+                                    | inl a => inl $ Some (s, a)
+                                    | inr b => inr $ Some (s, b)
+                                    end
+                  | None => inr $ None 
+                  end
+    ) <$> m.
+
+(* lift iteration combiator to state_delay *)
+Definition iter_state_delay {A B ST} (f: A -> state_delay ST (A + B)) : A -> state_delay ST B :=
+  λ a, State $ λ s, iter 
+                      (λ optsa, match optsa with
+                                | Some (s', a') => distribute_delay_state (runState (f a') s')
+                                | None => Answer $ inr $ None 
                                 end
-              | None => inr $ None (* choose inr to end recursion earlier?*)
-              end
-) <$> m).
-Defined.
+                      )
+                      (Some (s, a)).
 
-
-(*These combinators type check but could really use some testing! *)
-Definition iter_state_delay {A B ST} (f: A -> state_delay ST (A + B)) : A -> state_delay ST B.
-refine (λ a, State $ λ s, iter 
-                     (λ optsa, match optsa with
-                               | Some (s', a') => distribute_delay_state (runState (f a') s')
-                               | None => Answer $ inr $ None 
-                               end
-                     )
-                     (Some (s, a)) 
-   ).
-Defined.
-
-(* This definition is here to show the type of the f in iter_state_delay without iter fixing it *)
-Definition test {A B ST} (f: A -> state_delay ST (A + B))
-    : A -> ST -> (option (ST * A) -> delay (option (ST * A) + option (ST * B))).
-refine (λ (a: A) (s: ST) optsa,
-            match optsa with
-            | Some (s', a') => distribute_delay_state (runState (f a') s')
-            | None => Answer $ inr $ None 
-            end
-).
-Defined.
-
-(* Write down an equality over state_delay that leaks all the state
-   This can then be used for unrolling the first loop after that the layer of state becomes
-   transparent anwyays and we can use iter delay.
+(* Write down an equality over state_delay that exposes the state tuple.
+   This is required because after unrolling the first loop after that the layer of state becomes
+   exposed anwyays and we can use iter delay for futher reasoning.
 *)
 Lemma iter_state_delay_unfold_first {A B ST} (f: A -> state_delay ST (A + B)) (x: A):
   ∀ s, 
-  runState (iter_state_delay f x) s = distribute_delay_state (runState (f x) s) ≫= 
-   case_ (λ a, Think $ iter (λ optsa, match optsa with
-            | Some (s', a') => distribute_delay_state (runState (f a') s')
-            | None => Answer $ inr $ None 
-            end) a) Answer.
+    runState (iter_state_delay f x) s = distribute_delay_state (runState (f x) s) ≫= 
+      case_ (λ a, Think $ iter (λ optsa, match optsa with
+               | Some (s', a') => distribute_delay_state (runState (f a') s')
+               | None => Answer $ inr $ None 
+               end) a) Answer.
 Proof.
   intros s. unfold iter_state_delay. simpl.
   rewrite <- (delay_frob_eq (iter _ (Some (s, x)))).
@@ -196,17 +172,9 @@ Proof.
   done.
 Qed.
 
-(* Since runstate is exposed in the law above,
- can I prove something that puts it pack in the state abstraction?*)
-Lemma runState_eq {A ST} (e: state_delay ST A):
-  State $ (λ s, runState e s) = e.
-Proof.
-  destruct e.
-  reflexivity.
-Qed.
-
-Definition loop_state_delay {A B C ST} (f: (C + A) -> state_delay ST (C + B)): A -> state_delay ST B.
-refine (λ a, iter_state_delay
+Definition loop_state_delay {A B C ST} (f: (C + A) -> state_delay ST (C + B)): 
+  A -> state_delay ST B :=
+    λ a, iter_state_delay
               (λ ca: C + A,
                 (f ca) ≫= (λ cb: C + B,
                                 match cb with
@@ -215,11 +183,9 @@ refine (λ a, iter_state_delay
                                 end
                               )
               )
-              (inr a)
-    ).
-Defined.
+              (inr a).
 
-(*Next up implement the state operations! *)
+(*Next up the state operations! *)
 Definition getS {ST}: state_delay ST ST :=
   State $ λ st, Answer $ Some $ (st, st).
 
@@ -244,16 +210,11 @@ Definition get {A} (n: nat): state_delay (gmap nat A) A :=
 Definition put {A} (n: nat) (x : A) : state_delay (gmap nat A) unit :=
   modifyS' n  <[n := x]>.
 
-
 Definition fresh_adress {A} (σ: gmap nat A): nat := fresh $ dom (gset nat) σ.
 
-Definition alloc {A} (v: A) : state_delay (gmap nat A) nat.
-refine (
-  State $ λ st,  let freshn := fresh $ dom (gset nat) st
-                 in  Answer $ Some (<[freshn := v]> st, freshn)
-).
-Defined.
-
+Definition alloc {A} (v: A) : state_delay (gmap nat A) nat :=
+  State $ λ st, let freshn := fresh $ dom (gset nat) st
+                in  Answer $ Some (<[freshn := v]> st, freshn).
               
 Definition free {A} (n: nat): state_delay (gmap nat A) unit :=
   modifyS' n (delete n).
@@ -267,10 +228,8 @@ Fixpoint eval_delay {A} (n: nat) (ma: delay A): option A :=
             end
   end.
 
-Definition eval_state_delay' {ST A} (n: nat) (ma: state_delay ST A): ST -> option (ST * A).
-refine(λ st, mjoin $ eval_delay n $ runState ma st).
-Defined.
+Definition eval_state_delay' {ST A} (n: nat) (ma: state_delay ST A): ST -> option (ST * A) :=
+  λ st, mjoin $ eval_delay n $ runState ma st.
 
-Definition eval_state_delay {ST A} (n: nat) (ma: state_delay ST A): ST -> option A.
-refine(λ st, fmap snd $ mjoin $ eval_delay n $ runState ma st).
-Defined.
+Definition eval_state_delay {ST A} (n: nat) (ma: state_delay ST A): ST -> option A :=
+  λ st, fmap snd $ mjoin $ eval_delay n $ runState ma st.
