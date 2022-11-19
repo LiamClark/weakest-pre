@@ -5,17 +5,7 @@ From iris.base_logic.lib Require Export fancy_updates.
 From shiris.program_logic Require Import heapmodel modal delaystate. 
 Set Default Proof Using "Type".
 
-(*
-  We run into the same problem here as with the evaluator for state_delay: 
-  We need the state aspect for our state interpretation and our notion of separation.
-  We need to get to the Think constructor to recurse in our wp definition on the sub expression.
-  However once we get to the Think node, although it does contain pre_wired stateful operations they are now
-  completely opaque to us.
-
-  In the evaluator we work around this by having the (co-)recursion only work for the delay monad
-  Then add state on top as an extra layer. Can we write a wp that works just for delay?
-*)
-
+(* wp definition for delay monad *)
 Definition wp_delay_pre {Σ} {A} (go: delay A -d> (A -d> iPropO Σ) -d> iPropO Σ):
       delay A -d> (A -d> iPropO Σ) -d> iPropO Σ.
 refine(
@@ -34,16 +24,18 @@ Qed.
  
 Definition wp_delay {Σ} {A}: delay A -> (A -> iProp Σ) -> iProp Σ := fixpoint wp_delay_pre.
 
-Definition wp {Σ} {ST A} (SI: ST -> iProp Σ) (e: state_delay ST A) (Φ: A -> iProp Σ): iProp Σ.
-refine(∀ σ, 
+(* Definition of a wp connective for state_delay by layering it ontop of our wp definition for just
+   the delay monad
+*)
+Definition wp {Σ} {ST A} (SI: ST -> iProp Σ) (e: state_delay ST A) (Φ: A -> iProp Σ): iProp Σ :=
+  ∀ σ, 
     SI σ ==∗
-     wp_delay (runState e σ) (λ (res: option (ST * A)), 
-       match res with   
-       | Some (σ', x) => SI σ' ∗ Φ x 
-       | None => True
-       end)
-)%I.
-Defined.
+      wp_delay (runState e σ) (λ (res: option (ST * A)), 
+        match res with   
+        | Some (σ', x) => SI σ' ∗ Φ x 
+        | None => True
+        end
+      )%I.
 
 Lemma wp_delay_unfold {Σ A} (e: delay A) (Φ: A -> iProp Σ): wp_delay e Φ ≡ wp_delay_pre wp_delay e Φ.
 Proof.
@@ -80,8 +72,7 @@ Proof.
     iNext. iApply "IH". done.
 Qed.
 
-
-Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ) :
+Lemma wp_strong_mono_delay {Σ A} (e: delay A) (Φ Ψ: A -> iProp Σ):
   wp_delay e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp_delay e Ψ.
 Proof.
   iLöb as "IH" forall (e).
@@ -108,8 +99,7 @@ Qed.
 Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
-  wp_delay (f x) (case_ (λ x, ▷ wp_delay (iter f x) Φ) Φ) -∗
-  wp_delay (iter f x) Φ.
+  wp_delay (f x) (case_ (λ x, ▷ wp_delay (iter f x) Φ) Φ) -∗ wp_delay (iter f x) Φ.
 Proof.
   iIntros "Hwp".
   rewrite iter_unfold.
@@ -129,8 +119,8 @@ Lemma wp_delay_loop_rec {Σ A B C} (Φ: B -> iProp Σ)
                     | inl c  => ▷ wp_delay (loop_rec f (inl c)) Φ
                     | inr b  =>  Φ b
                     end
-  ) -∗
-  wp_delay (loop_rec f x) Φ.
+  ) 
+  -∗ wp_delay (loop_rec f x) Φ.
 Proof.
   iIntros "Hwp".
   rewrite loop_rec_unfold.
@@ -149,13 +139,13 @@ Lemma wp_delay_loop' {Σ A B C} (Φ: B -> iProp Σ)
                     | inl c  => ▷ wp_delay (loop_rec f (inl c)) Φ
                     | inr b  =>  Φ b
                     end
-  ) -∗
-  wp_delay (loop' f x) Φ.
+  ) 
+  -∗ wp_delay (loop' f x) Φ.
 Proof.
   by iApply wp_delay_loop_rec.
 Qed.
 
-Lemma bupd_wp_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : (|==> wp_delay e Φ) ⊢ wp_delay e Φ.
+Lemma bupd_wp_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ): (|==> wp_delay e Φ) ⊢ wp_delay e Φ.
 Proof.
   iIntros "Hwp".
   rewrite wp_delay_unfold.
@@ -163,7 +153,7 @@ Proof.
   by iMod "Hwp" as "Hwp".
 Qed.
 
-Lemma wp_bupd_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ) : wp_delay e (λ v, |==> Φ v) ⊢ wp_delay e Φ.
+Lemma wp_bupd_delay {Σ A} (e: delay A) (Φ : A -> iProp Σ): wp_delay e (λ v, |==> Φ v) ⊢ wp_delay e Φ.
 Proof.
   iIntros "Hwp".
   iApply (wp_strong_mono_delay with "Hwp").
@@ -171,8 +161,9 @@ Proof.
 Qed.
 
 Lemma adequacy_delay {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
-    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
-    eval_delay n prog = Some x -> φ x.
+    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) 
+    -> eval_delay n prog = Some x 
+    -> φ x.
 Proof.
   intros Hpre Heval.
   apply (@later_bupdN_soundness (iResUR Σ) n).
@@ -192,33 +183,7 @@ Proof.
       by iApply "IH".
 Qed.
 
-Lemma adequacy_delay' {A} {Σ} (φ: A -> Prop) (n: nat) (x: A) (prog : delay A):
-    (⊢ @wp_delay Σ A prog (λ x, ⌜φ x⌝)) ->
-    match eval_delay n prog with
-    | Some x => φ x
-    | None => True
-    end.
-Proof.
-  intros Hpre.
-  apply (@later_bupdN_soundness (iResUR Σ) n).
-  revert Hpre.
-  apply lift_entails.
-  iIntros "Hpre".
-  destruct (eval_delay n prog) as [x' | ] eqn: E .
-  - iInduction n as [|n'] "IH" forall (prog E).
-    + done.
-    + simpl in *.
-      rewrite wp_delay_unfold.
-      unfold wp_delay_pre.
-      destruct prog as [a| prog']. simplify_eq/=.
-        * iMod "Hpre" as %Hpre.
-          iModIntro. iNext.
-          by iApply nlaters.
-        * iMod "Hpre". iModIntro. iNext.
-          by iApply "IH".
-  - by iApply nlaters. 
-  Qed.
-
+(* Rules for the state_delay monad*)
 Lemma wp_strong_mono {Σ A ST SI} (e: state_delay ST A) (Φ Ψ : A -> iProp Σ):
   wp SI e Φ -∗ (∀ v, Φ v ==∗ Ψ v) -∗ wp SI e Ψ .
 Proof.
@@ -254,17 +219,6 @@ Proof.
   iApply wp_delay_return. by iFrame.
 Qed.
 
-(*
-Lemma wp_delay_fmap {Σ A B} (f: A -> B) (Φ: B -> iProp Σ) (e: delay A): 
-  wp_delay e (Φ ∘ f ) -∗ wp_delay (f <$> e) Φ. 
-Proof.
-  iIntros "Hwp".
-  iApply wp_delay_bind.
-  iApply (wp_strong_mono_delay with "Hwp").
-  iIntros (x) "Hpost !> /=".
-  by iApply wp_delay_return.
-Qed.
-*)
 Lemma wp_fmap  {Σ A B ST} {SI: ST -> iProp Σ}
  (f: A -> B)
  (Φ: B -> iProp Σ)
@@ -393,8 +347,7 @@ End delay_wp_heap.
 Section state_delay_adequacy.
   Context `{! inG Σ (heapR V)}.
 
-  (* This allows the use of evaluation info from the outer stack,
-    for the inner stack *)
+  (* Transport an evaluation result from the state_delay monad to the delay monad *)
   Lemma eval_state_eval_delay {A} (n: nat) (x: A)
    (prog: state_delay (gmap nat V) A)
    (st st': gmap nat V):  
@@ -409,14 +362,15 @@ Section state_delay_adequacy.
     - done.
   Qed.
   
-  (* For adequacy we need the post condition wp uses for wp_delay, to change to a 
-    pure assertion.*)
-  Definition adapt_post {A} (φ: A -> Prop):
-    option (gmap nat V * A) -> Prop :=
-     λ res, match res with
-                | Some (_, x) => φ x
-                | None => True
-                end.
+  (*
+    For adequacy we need the post condition wp uses for wp_delay to change to a 
+    pure assertion.
+  *)
+  Definition adapt_post {A} (φ: A -> Prop): option (gmap nat V * A) -> Prop :=
+    λ res, match res with
+           | Some (_, x) => φ x
+           | None => True
+           end.
 
   Lemma adapt_pre {A} {γ} (φ: A -> Prop) (res: option (gmap nat V * A)):
                      match res with
@@ -431,27 +385,32 @@ Section state_delay_adequacy.
     - done.
   Qed.
   
-  (*For adequacy_delay_state we need an extra update modality compared to the normal
-    adequacy statement for the delay monad. 
-    It is required in order to allocate the initial heap and get a gname.
-  *) 
+  (*
+    Specialisation of adequacy delay that exposes the adapted post conditions and state tuples
+    This makes it easier to call in adequacy_state_delay.
+  *)
   Lemma adequacy_state_inbetween {A} (φ: A -> Prop) (n: nat) 
     (x: A) 
     (prog : state_delay (gmap nat V) A)
     (st st': gmap nat V):
-    (⊢ @wp_delay Σ _(runState prog st) (λ y, ⌜adapt_post φ y⌝)) ->
-    (eval_delay n (runState prog st) = Some (Some (st', x)))
+    (⊢ @wp_delay Σ _(runState prog st) (λ y, ⌜adapt_post φ y⌝)) 
+    -> (eval_delay n (runState prog st) = Some (Some (st', x)))
     -> (adapt_post φ (Some (st', x))).
   Proof.
     apply adequacy_delay.
   Qed. 
- 
+
+  (*
+    For adequacy_delay_state we need an extra update modality compared to the normal
+    adequacy statement for the delay monad. 
+    It is required in order to allocate the initial heap and get a gname.
+  *) 
   Lemma adequacy_state_delay {A} (φ: A -> Prop) (n: nat) (x: A) 
     (prog : state_delay (gmap nat V) A)
     (st st': gmap nat V)
-    : (∀γ, ⊢ wp (state_interp γ) prog (λ x, ⌜φ x⌝)) ->
-    eval_state_delay' n prog st = Some (st', x) ->
-    φ x. 
+    : (∀γ, ⊢ wp (state_interp γ) prog (λ x, ⌜φ x⌝)) 
+    -> eval_state_delay' n prog st = Some (st', x)
+    -> φ x. 
   Proof.
     intros Hpre Heval.
     eapply adequacy_state_inbetween.
@@ -471,21 +430,21 @@ Section state_delay_adequacy.
   Qed. 
 End state_delay_adequacy.
 
+(* Formalisation of hoare triples for the delay monad *)
+(*{P} e {Q} =  □(P -* wp e {Q}) *)
 Definition hoare_delay {Σ} {A} (P: iProp Σ) (e: delay A) (Q: A -> iProp Σ): iProp Σ
 := □ (P -∗ wp_delay e Q).
-
-(*{P} e {Q} =  □(P -* wp e {Q}) *)
-
-(*
-Lemma wp_delay_think {Σ A}(e: delay A) (Φ: A -> iProp Σ): ▷ wp_delay e Φ -∗ wp_delay (Think e) Φ.
-*)
 (*
   persistent hypothesis can be moved between the hoare pre condition and the context
   hoare_ctx
 *)
+
+(* 
+  rule Equivalent for:
+  Lemma wp_delay_think {Σ A}(e: delay A) (Φ: A -> iProp Σ): ▷ wp_delay e Φ -∗ wp_delay (Think e) Φ.
+*)
 Lemma hoare_delay_think {Σ A} (e: delay A) (P: iProp Σ) (Q: A -> iProp Σ):
-   hoare_delay P e Q -∗
-   hoare_delay (▷ P) (Think e) Q.
+   hoare_delay P e Q -∗ hoare_delay (▷ P) (Think e) Q.
 Proof.
   iIntros "#Hhoare !>".
   unfold hoare_delay.
@@ -495,20 +454,8 @@ Proof.
   iApply ("Hhoare" with "Hp").
 Qed.
 
-(* 
-  So this one is true, but is it usable?
-*)
-Lemma hoare_delay_mret {Σ A} (x: A) (P: iProp Σ) (Q: A -> iProp Σ):
-  ⊢ @hoare_delay Σ A True (Answer x) (λ w, ⌜w = x⌝).
-Proof.
-  unfold hoare_delay.
-  iIntros "!> _".
-  by iApply wp_delay_return.
-Qed.
-
 Lemma hoare_delay_mret' {Σ A} (x: A) (Q: iProp Σ) (P: A -> iProp Σ):
-  □(Q -∗ P x) -∗
-  hoare_delay Q (Answer x) P.
+  □(Q -∗ P x) -∗ hoare_delay Q (Answer x) P.
 Proof.
   unfold hoare_delay.
   iIntros "#Hwand !> Hp".
@@ -518,9 +465,9 @@ Qed.
 
 Lemma hoare_delay_consequence {Σ A} (P P': iProp Σ) (Q Q': A -> iProp Σ)
   (e: delay A)
-  : □(P' -∗ P) -∗ □(∀x, Q x -∗ Q' x) -∗
-  hoare_delay P e Q -∗
-  hoare_delay P' e Q'.
+  : □(P' -∗ P) -∗ □(∀x, Q x -∗ Q' x)
+  -∗ hoare_delay P e Q
+  -∗ hoare_delay P' e Q'.
 Proof.
   iIntros "#Hp #Hq #Hhd".
   iIntros "!> Hp'".
@@ -532,9 +479,9 @@ Qed.
 
 Lemma hoare_delay_consequence_l {Σ A} (P P': iProp Σ) (Q: A -> iProp Σ)
   (e: delay A)
-  : □(P' -∗ P) -∗
-  hoare_delay P e Q -∗
-  hoare_delay P' e Q.
+  : □(P' -∗ P)
+  -∗ hoare_delay P e Q 
+  -∗ hoare_delay P' e Q.
 Proof.
   iIntros "#Hp #Hq".
   iIntros "!> Hp'".
@@ -542,31 +489,24 @@ Proof.
   by iApply "Hq".
 Qed.
 
-(* not provable due to the persistence modality?*)
-(* Lemma hoare_delay_mret'' {Σ A} (x: A) (P: A -> iProp Σ):
-  P x -∗ @hoare_delay Σ A (True) (Answer x) P.
-Proof.
-  unfold hoare_delay.
-  iIntros "Hp !>".
-  by iApply wp_delay_return.
-Qed. *)
-
-
 (*
+Rule equivalent for:
 Lemma wp_delay_iter {Σ A B} (Φ: B -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
   wp_delay (f x) (case_ (λ x, ▷ wp_delay (iter f x) Φ) Φ) -∗
   wp_delay (iter f x) Φ.
-*)
 
+  The issue here is that there is no good point to place the later modality,
+  making this rule weaker than the wp equivalent.
+*)
 Lemma hoare_delay_iter {Σ A B} (P: iProp Σ) (Q: A -> iProp Σ)
   (R: B -> iProp Σ)
   (x: A)
   (f: A -> delay (A + B)):
-  hoare_delay P (f x) (case_ (λ x, ▷ Q x) R) -∗
-  ▷ (∀ a, hoare_delay (Q a) (delaystate.iter f a) R ) -∗
-  hoare_delay P (delaystate.iter f x) R.
+  hoare_delay P (f x) (case_ (λ x, ▷ Q x) R) 
+  -∗ ▷ (∀ a, hoare_delay (Q a) (delaystate.iter f a) R ) 
+  -∗ hoare_delay P (delaystate.iter f x) R.
 Proof.
   iIntros "#Hhf #Hhiter !> HP".
   iApply wp_delay_iter.
@@ -581,8 +521,8 @@ Qed.
 Lemma hoare_delay_ctx {Σ A} (P Q: iProp Σ) `{!Persistent Q}
   (R: A -> iProp Σ)
   (e: delay A):
-  hoare_delay (P ∗ Q) e R -∗
-  (Q -∗ hoare_delay P e R).
+  hoare_delay (P ∗ Q) e R 
+  -∗ (Q -∗ hoare_delay P e R).
 Proof.
   iIntros "#Hpq #Hq !> Hp".
   iDestruct "Hq" as "-#Hq". 
@@ -592,8 +532,8 @@ Qed.
 Lemma hoare_delay_ctx' {Σ A} (P Q: iProp Σ) 
   (R: A -> iProp Σ)
   (e: delay A):
-  □(Q -∗ hoare_delay P e R) -∗
-  hoare_delay (P ∗ Q) e R. 
+  □(Q -∗ hoare_delay P e R)
+  -∗ hoare_delay (P ∗ Q) e R. 
 Proof.
   iIntros "#Hqhd !> (Hp & Hq)".
   iDestruct ("Hqhd" with "Hq") as "#Hphd".
@@ -602,8 +542,8 @@ Qed.
 
 Lemma hoare_lob {Σ A B} (P : B -> iProp Σ) (Q : B -> A -> iProp Σ)
   (e: B -> delay A):
-  (∀x: B, hoare_delay (P x ∗ ▷ (∀x : B, hoare_delay (P x) (e x) (Q x))) (e x) (Q x)) -∗
-  ∀x: B, hoare_delay (P x) (e x) (Q x).
+  (∀x: B, hoare_delay (P x ∗ ▷ (∀x : B, hoare_delay (P x) (e x) (Q x))) (e x) (Q x))
+  -∗ ∀x: B, hoare_delay (P x) (e x) (Q x).
 Proof.
   iIntros "#Hpq".
   iLöb as "IH".
