@@ -44,7 +44,7 @@ Qed.
 
 Lemma test_coq_fib_move: coq_fib 13 21 4 = coq_fib 5 8 (S (S 4)).
 Proof.
-    reflexivity.
+  reflexivity.
 Qed.
 
 Section delay_verif.
@@ -90,8 +90,9 @@ Section delay_verif.
         reflexivity.
   Qed.
   
-  (* To get lob induction to work we need the numbers that are passed
-      between loop states to vary. This means the post condition needs the same generalisation.
+  (* 
+    To get lob induction to work we need the numbers that are passed
+    between loop states to vary. This means the post condition needs the same generalisation.
   *)
   Lemma verify_delay_fib' x y n:
       ⊢ wp_delay (delaystate.iter fib' (n, x, y)) (post' x y n).
@@ -144,8 +145,8 @@ Section delay_verif.
     end.
   
   Lemma verify_delay_state_fib' l1 l2 n1 n2 n:
-      ∀ γ, points_to γ l1 n1 ∗ points_to γ l2 n2 -∗
-              wp (state_interp γ) (iter_state_delay (fib_state' l1 l2) n) (post' n1 n2 n).
+    ∀ γ, points_to γ l1 n1 ∗ points_to γ l2 n2 -∗
+            wp (state_interp γ) (iter_state_delay (fib_state' l1 l2) n) (post' n1 n2 n).
   Proof.
       iIntros (γ) "(Hl1 & Hl2)".
       iLöb as "IH" forall (n n1 n2).
@@ -193,7 +194,6 @@ Section loop_verif.
     ⊢ @wp_delay Σ A loop_prog (λ _, False).
   Proof.
     iLöb as "IH".
-    (* unfold loop_prog. *)
     iApply wp_delay_iter.
     iApply wp_delay_return.
     simpl.
