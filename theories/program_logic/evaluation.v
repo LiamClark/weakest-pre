@@ -4,7 +4,9 @@ From shiris.program_logic Require Import itree.
 Definition heap V := gmap nat V.
 
 (* 
-  To distinguish between forked threads that return no value.
+  We need to store threads in a thread pool.
+  A thread can either be a main thread (returns a value),
+  or a Forked thread (always returns unit)
 *)
 Variant thread (V A: Type): Type :=
 | Main (e: expr V A)
@@ -14,10 +16,11 @@ Arguments Main {_ _}.
 Arguments Forked {_ _}.
 
 Instance fmap_thread {V}: FMap (thread V) :=
-  λ A B f fa, match fa with
-              | Main e' => Main $ f <$> e'
-              | Forked e => Forked e
-  end.
+  λ A B f fa,
+    match fa with
+    | Main e' => Main $ f <$> e'
+    | Forked e => Forked e
+    end.
 
 Definition is_main {V A} (t: thread V A): option (expr V A) :=
   match t with
@@ -69,7 +72,7 @@ Definition into_prog {A} (x: option A) :=
   end.
 
 (* 
-  V: the tyep of values on the heap
+  V: the type of values on the heap
   A: The type the main thread of the computation yields
   B: the value computed by the computation
 *)
@@ -83,7 +86,6 @@ Arguments runState {_ _ _} .
 
 Definition map_1 {A B C D} (f: A -> D) (x: A * B * C): D * B * C :=
   let '(x, y, z) := x in (f x, y, z).
-
 
 Instance fmap_state {V A}: FMap (state V A) :=
   λ B C f fa, 
@@ -99,6 +101,11 @@ Instance mbind_state {V A}: MBind (state V A) :=
            '(x, h', threads) ← (runState ma) h threads ;
             runState (f x) h' threads.
 
+(*
+  Helper lemma that is required for adequacy.
+  Running a program that conists of a bind, is the same as running the initial computation
+  and then running the continuation with the results from the first computation.
+*)
 Lemma run_bind_dist {V A B C} h ts
   (m: state V A B) (f: B -> state V A C):
   runState (m ≫= f) h ts =  match runState m h ts with
@@ -145,7 +152,6 @@ Section state_op.
 
    Definition set_thread (n: nat) (t: thread V A): state V A () :=
      State $ λ h ts, Here $ (tt, h,  <[n:=t]> ts).
-   
 End state_op.
 
 
@@ -174,16 +180,16 @@ Section heap_op.
 End heap_op.
 
 Definition step_vis {V R T A} {cmp: EqDecision V} (c: envE V T):
- (T -> expr V A) -> state V R (expr V A) :=
-  match c with
-  | GetE l          => λ k, k <$> get l
-  | PutE l v        => λ k, k <$> put l v
-  | AllocE v        => λ k, k <$> alloc v
-  | FreeE l         => λ k, k <$> free l
-  | CmpXchgE l v v' => λ k, k <$> cmpXchg l v v'
-  | FailE           => λ k, lift_error fail_prog
-  end.
-
+  (T -> expr V A) -> state V R (expr V A) :=
+    match c with
+    | GetE l          => λ k, k <$> get l
+    | PutE l v        => λ k, k <$> put l v
+    | AllocE v        => λ k, k <$> alloc v
+    | FreeE l         => λ k, k <$> free l
+    | CmpXchgE l v v' => λ k, k <$> cmpXchg l v v'
+    | FailE           => λ k, lift_error fail_prog
+    end.
+  
 Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr V A) :=
   match e with
   | Answer x  => mret $ Answer x 
@@ -195,13 +201,13 @@ Definition step_expr {V R A} {cmp: EqDecision V} (e: expr V A): state V R (expr 
 Fixpoint eval_single {V R} {cmp: EqDecision V} (n: nat) (e: expr V R) {struct n}: state V R R :=
   match n with
   | O => fail
-  | S n' => (step_expr e) ≫= (eval_single n') 
+  | S n' => step_expr e ≫= eval_single n' 
   end. 
 
 Definition step_thread {V R} {cmp: EqDecision V} (t: thread V R) : state V R (thread V R) :=
   match t with 
-  | Main e => Main <$> (step_expr e)
-  | Forked e => Forked <$> (step_expr e) 
+  | Main e => Main <$> step_expr e
+  | Forked e => Forked <$> step_expr e 
   end.
 
 CoInductive scheduler V R := Scheduler {
@@ -214,27 +220,28 @@ Arguments Scheduler {_ _}.
 CoFixpoint const_scheduler {V R} (n: nat): scheduler V R :=
   Scheduler $  λ '(ts, h), (n, const_scheduler n).
 
-
 Fixpoint list_scheduler {V R} (s: list nat) (n: nat): scheduler V R :=
   Scheduler $ λ '(ts, h),
-   match s with
-    | []      => (n, const_scheduler n)
-    | n' :: ns => (n', list_scheduler ns n)
-    end.
+    match s with
+     | []      => (n, const_scheduler n)
+     | n' :: ns => (n', list_scheduler ns n)
+     end.
 
 CoFixpoint stream_scheduler {V R} (s: stream nat): scheduler V R :=
   Scheduler $ λ '(ts, h),
     let '(scons x xs) := s in (x, stream_scheduler xs).
 
-  (* Main thread is always at position one*)
+(* Main thread is always at position zero*)
 Definition check_main {V R} (ts: list (thread V R)): option R :=
          match ts with
          | [] => None
          | t :: ts' => is_main t ≫= is_done
          end.
 
-(* get main expr from pool 
-   fix order indexing by modulo.
+(*
+  First we retrieve a thread_index from the scheduler.
+  Modulo it to ensure its in bound of the thread pool.
+  Then have that thread perform a step and update it in the pool.
 *)
 Definition single_step_thread {V R} {cmp: EqDecision V} (s: scheduler V R)
   : state V R (scheduler V R ) :=
@@ -248,6 +255,7 @@ Definition single_step_thread {V R} {cmp: EqDecision V} (s: scheduler V R)
       set_thread thread_index updatedThread ;; 
       mret s'.
 
+(* lift single_step_thread to a recursive fuel evaluator *)
 Fixpoint eval_threaded {V R} {cmp: EqDecision V} (n: nat) (s : scheduler V R) {struct n}: state V R R :=
   match n with
     | O    => lift_error fail_eval
@@ -267,26 +275,21 @@ Definition fstt {A B C} (x: A * B * C): A := x.1.1.
   s  : The co-inductive scheduler to allow for interleaving of threads.
   e  : The program to run.
 *)
-Definition run_program {V R} {cmp: EqDecision V} (n: nat) (s: scheduler V R) (e: expr V R): error R.
-refine (fst ∘ fst <$> runState (eval_threaded n s) ∅ [Main e]).
-Defined.
+Definition run_program {V R} {cmp: EqDecision V} (n: nat)
+  (s: scheduler V R) (e: expr V R): error R :=
+    fst ∘ fst <$> runState (eval_threaded n s) ∅ [Main e].
 
-Definition incr (l: loc): expr nat nat. 
-refine(itree.get l ≫= λ n, itree.put l (S n) ;; mret n).
-Defined.
+Definition incr (l: loc): expr nat nat :=
+  itree.get l ≫= λ n, itree.put l (S n) ;; mret n.
 
-Definition decr (l: loc): expr nat nat. 
-refine(itree.get l ≫= λ n, itree.put l (n - 1) ;; mret n).
-Defined.
+Definition decr (l: loc): expr nat nat :=
+  itree.get l ≫= λ n, itree.put l (n - 1) ;; mret n.
 
+(* test program*)
 Definition prog: expr nat nat.
 refine (
   l ← itree.alloc 5;
-  Fork
-    (* side thread *)
-    (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt)
-    (* (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt) *)
-  (* main thread *)
+  itree.fork (iter (λ t, incr l ;; mret (inl tt)) tt ;; mret tt) ;;
   (decr l ;; decr l ;; itree.get l)
   ).
   exact nat.
@@ -296,15 +299,6 @@ Definition prog_scheduler {V R: Type} := (@list_scheduler V R [0; 0; 5 ] 0).
 
 Definition dump_heap {A B C} (x: A * B * C): (A * C) :=
   (x.1.1, x.2).
-
-(* Check (runState (single_step_thread prog_scheduler) ∅ [Main prog]). *)
-
-Definition steps {V R} {cmp: EqDecision V} : state V R (scheduler V R).
-refine( 
-   (((single_step_thread prog_scheduler ≫= single_step_thread)
-    ≫= single_step_thread) ≫= single_step_thread)
-).
-Defined.
 
 (*
  index 0 is the main thread

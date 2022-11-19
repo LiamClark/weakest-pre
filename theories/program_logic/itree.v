@@ -35,7 +35,6 @@ Arguments FreeE {_}.
 Arguments CmpXchgE {_}.
 Arguments FailE {_ _}.
 
-(* Definition expr (V: Type) {cmp: EqDecision V} := itree (envE V).  *)
 Definition expr (V: Type) := itree (envE V). 
 
 Definition get {V} (l: loc): expr V V := Vis (GetE l) Answer.
@@ -57,7 +56,6 @@ Instance itree_bind {E}: MBind (itree E) :=
       | Vis cmd k => Vis cmd (λ x, go (k x))
       end.
 
-
 Instance itree_mret {E}: MRet (itree E) :=
  λ _ x, Answer x.
 
@@ -65,17 +63,15 @@ Instance itree_fmap {E}: FMap (itree E) :=
    λ A B f ma, ma ≫= mret ∘ f.
 
 Definition pipe {M} {m: MBind M} {A B C} 
-    (f: A -> M B)
-    (g: B -> M C): A -> M C := 
-  λ x,  f x ≫= g.
+  (f: A -> M B) (g: B -> M C): A -> M C := 
+    λ x, f x ≫= g.
 
-Definition case_ {A B C}  (f: A -> C) (g: B -> C)
-  : (A + B -> C) :=
-    λ ab,
-        match ab with
-        | inl a => f a
-        | inr b => g b
-        end .
+Definition case_ {A B C}  (f: A -> C) (g: B -> C): (A + B -> C) :=
+  λ ab,
+    match ab with
+    | inl a => f a
+    | inr b => g b
+    end.
   
 CoFixpoint iter {E A B} (f: A -> itree E (A + B)) : A -> itree E B :=
     pipe f (case_ (Think ∘ iter f) Answer).
@@ -102,7 +98,7 @@ Proof.
 Qed.
 
 Lemma iter_unfold {V R B} (f: R -> expr V (R + B)) (x: R):
-   iter f x = f x ≫= case_ (Think ∘ iter f) Answer.
+  iter f x = f x ≫= case_ (Think ∘ iter f) Answer.
 Proof.
   rewrite <- (expr_frob_eq (iter f x)).
   rewrite <- (expr_frob_eq (_ ≫= _)).
@@ -121,14 +117,14 @@ Definition loop {E A B C} (f: (C + A) -> itree E (C + B)): A -> itree E B :=
          (inr a).
 
 Definition is_done {V R} (e: expr V R): option R :=
-    match e with
-    | Answer r => Some r
-    | Think t  => None 
-    | Fork e k => None 
-    | Vis e k  => None 
-    end.
+  match e with
+  | Answer r => Some r
+  | Think t  => None 
+  | Fork e k => None 
+  | Vis e k  => None 
+  end.
 
 Definition fresh_loc {V} (σ: gmap nat V): loc :=
-    fresh (dom (gset nat) σ).
+  fresh (dom (gset nat) σ).
 
 

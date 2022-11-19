@@ -4,10 +4,10 @@ From iris.proofmode Require Import proofmode.
 From iris.base_logic.lib Require Import invariants.
 From shiris.program_logic Require Import evaluation heapmodel itree itreewp.
 
-Definition prog_swap  (l k: nat): expr nat unit := 
-    x ← itree.get l ;
-    y ← itree.get k ;
-    itree.put l y ;; itree.put k x.
+Definition prog_swap (l k: nat): expr nat unit := 
+  x ← itree.get l ;
+  y ← itree.get k ;
+  itree.put l y ;; itree.put k x.
 
 Definition loop_body {A}: unit -> expr nat A :=
   itree.iter (λ x, mret $ inl ()).
@@ -70,7 +70,8 @@ Section lock_verification.
   Qed.
 
   Lemma try_aquire_spec (lk: loc) (Φ: bool -> iProp Σ) (R: iProp Σ):
-    is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) -∗ wp (state_interp γ) ⊤ (try_acquire lk) Φ.
+    is_lock lk R -∗ (∀ b: bool, (if b then R else True) -∗ Φ b) 
+    -∗ wp (state_interp γ) ⊤ (try_acquire lk) Φ.
   Proof.
     iIntros "#Hlock Hpost".
     unfold is_lock.
@@ -93,7 +94,7 @@ Section lock_verification.
         iModIntro. iSimpl. iApply ("Hpost" $! true with "HR") .
         + iApply (wp_cmpXchg_fail' _ _ (Value n) with "[] Hpt"); try done.
           iNext. iExFalso. iApply "HR".
-    Qed.
+  Qed.
 
   Lemma aqcuire_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
     is_lock lk R -∗ (R -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (acquire lk) Φ.
@@ -109,7 +110,7 @@ Section lock_verification.
   Qed.
 
   Lemma release_spec (lk: loc) (Φ: unit -> iProp Σ) (R: iProp Σ):
-    is_lock lk R -∗ R -∗ (True -∗ Φ tt) -∗ wp (state_interp γ) ⊤ (release lk) Φ.
+    is_lock lk R -∗ R -∗ Φ tt -∗ wp (state_interp γ) ⊤ (release lk) Φ.
   Proof.
     iIntros "#Hlock Hr Hpost".
     iInv "Hlock" as (c) "[Hl HR]" "Hclose".
@@ -179,11 +180,10 @@ Section bank_verification.
   Definition lock_payload (γc: gname) (l : loc) : iProp Σ :=
     ∃ n, own γc (● n) ∗ points_to γ l (Value n).
 
-  Lemma withdraw_spec_suc (γc: gname) n m lval (Φ: bool -> iProp Σ)
-  : m <= n ->
-  points_to γ lval (Value n) -∗
-  (points_to γ lval (Value (n - m)) -∗ Φ true) -∗
-  wp (state_interp γ) ⊤ (withdraw m lval) Φ.
+  Lemma withdraw_spec_suc (γc: gname) n m lval (Φ: bool -> iProp Σ):
+    m <= n -> points_to γ lval (Value n) 
+    -∗ (points_to γ lval (Value (n - m)) -∗ Φ true) 
+    -∗ wp (state_interp γ) ⊤ (withdraw m lval) Φ.
   Proof.
     iIntros (Hle) "Hpt Hpost". 
     iApply wp_bind. iApply (wp_get with "Hpt"). iIntros "Hpt".
@@ -217,9 +217,10 @@ Section bank_verification.
     done.
   Qed.
 
-  Lemma withdraw_locked_spec (γc: gname) m lbal llock (Φ: () -> iProp Σ)
-  : (@is_lock _ _ _ γ llock (lock_payload γc lbal))-∗ own γc (◯ m)
-  -∗ (True -∗ Φ ())
+  Lemma withdraw_locked_spec (γc: gname) m lbal llock (Φ: () -> iProp Σ):
+  (@is_lock _ _ _ γ llock (lock_payload γc lbal))
+  -∗ own γc (◯ m)
+  -∗ Φ () 
   -∗ wp (state_interp γ) ⊤ (withdraw_locked m llock lbal) Φ.
   Proof.
     iIntros "#Hlock Hfrag Hpost". unfold withdraw_locked.
@@ -246,10 +247,10 @@ Section bank_verification.
     - 
      iNext. iApply wp_bind.
       iApply (withdraw_locked_spec with "Hinv H5").
-      iIntros "_".  iApply (withdraw_locked_spec with "Hinv H25"). done.
-    - iApply wp_bind. iApply (withdraw_locked_spec with "Hinv H20"). iIntros "_".
-      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv H2").  iIntros "_".
-      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv H10"). iIntros "_".
+      iApply (withdraw_locked_spec with "Hinv H25"). done.
+    - iApply wp_bind. iApply (withdraw_locked_spec with "Hinv H20").
+      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv H2").
+      iApply wp_bind. iApply (withdraw_locked_spec with "Hinv H10"). 
       by iApply wp_return.
   Qed.
 End bank_verification.
